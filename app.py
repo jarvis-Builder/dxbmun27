@@ -5,7 +5,10 @@ import re
 import sqlite3
 import time
 
-from flask import Flask, g, jsonify, render_template, request, session
+from flask import Flask
+app = Flask(__name__) # Ensure it is named exactly 'app'
+
+# Your routes go here...
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 IS_VERCEL = os.environ.get("VERCEL") == "1"

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DXBMUN 27'</title>
+  <meta name="description" content="Explore DXBMUN 27' committees, conference schedule and delegate E-Chits platform.">
+  <meta name="theme-color" content="#1a0408">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="intro-active">
+
+<section class="cinematic" id="cinematic" role="dialog" aria-modal="true" aria-labelledby="cinematic-title" tabindex="-1">
+  <div class="cinematic-content">
+    <p class="cinematic-kicker">Dubai · 2027</p>
+    <div class="cinematic-seal" aria-hidden="true">
+      <span class="seal-orbit"></span>
+      <span class="seal-star">✦</span>
+    </div>
+    <h1 class="cinematic-title" id="cinematic-title"><span>DXB</span><span class="cinematic-outline">MUN</span></h1>
+    <p class="cinematic-tagline">Diplomacy around us</p>
+    <div class="cinematic-progress" aria-hidden="true"><span></span></div>
+  </div>
+</section>
+
+<a class="skip-link" href="#main-content">Skip to content</a>
+<nav class="nav" aria-label="Main navigation" inert>
+  <a href="#home" class="logo"><span class="logo-box">DXB <b>MUN</b></span></a>
+  <div class="links">
+    <a href="#home">Home</a>
+    <a href="#about">About</a>
+    <a href="#committees">Committees</a>
+    <a href="#schedule">Schedule</a>
+    <a href="#echits">E-Chits</a>
+    <a href="#wellness">Wellness</a>
+    <a href="#contact">Contact</a>
+  </div>
+</nav>
+
+<main id="main-content" inert>
+  <!-- HOME -->
+  <section id="home" class="hero">
+    <div class="hero-text">
+      <p class="kicker">Model United Nations · Dubai</p>
+      <h1><span class="solid">DXB</span><span class="outline">MUN</span></h1>
+      <p class="year">DXBMUN 27'</p>
+      <div class="btns">
+        <a class="btn gold" href="#committees">Explore committees</a>
+        <a class="btn ghost" href="#schedule">See the schedule</a>
+      </div>
+    </div>
+    <div class="hero-art">
+      <div class="photo">
+        <img src="{{ url_for('static', filename='hero.svg') }}" alt="Illustration of delegates gathered around a conference table beneath a globe.">
+      </div>
+      <span class="badge coral"><span class="committee-count">22</span> Committees</span>
+      <span class="badge white">3 Days</span>
+      <svg class="seal" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r="98" fill="#f2b705"/>
+        <defs><path id="circ" d="M100,100 m-72,0 a72,72 0 1,1 144,0 a72,72 0 1,1 -144,0"/></defs>
+        <text class="seal-text"><textPath href="#circ">DXBMUN 27' · DIPLOMACY AROUND US · DUBAI ·</textPath></text>
+        <circle cx="100" cy="100" r="30" fill="#6b1020"/>
+        <polygon points="100,82 105,95 119,95 108,103 112,117 100,109 88,117 92,103 81,95 95,95" fill="#f2b705"/>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="about" class="section">
+    <span class="num">01</span>
+    <h2>About</h2>
+    <div class="card">
+      <p>DXBMUN 27' brings delegates together in Dubai for three days of debate, diplomacy and
+      problem-solving. Explore <span class="committee-count">22</span> committees, write resolutions, negotiate with allies and find out how
+      much one voice can change.</p>
+      <p class="muted">Committee agendas and schedule details may be updated by the conference organizers.</p>
+    </div>
+  </section>
+
+  <!-- COMMITTEES -->
+  <section id="committees" class="section">
+    <span class="num">02</span>
+    <h2>Committees</h2>
+    <div class="card pin">
+      <div class="pin-info" id="pin-info" aria-live="polite"></div>
+      <div class="pin-side">
+        <div class="wheel" id="wheel" tabindex="0" role="group" aria-label="Committee selector. Use arrow keys, scroll, drag, or select a visible committee."></div>
+        <p class="hint">Scroll · Drag · Select · Use arrow keys</p>
+        <p class="ticket" id="ticket" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCHEDULE -->
+  <section id="schedule" class="section">
+    <span class="num">03</span>
+    <h2>Schedule</h2>
+    <div class="card">
+      <div class="tabs" id="day-tabs" role="tablist" aria-label="Conference day"></div>
+      <ul class="timeline" id="timeline" role="tabpanel" aria-labelledby="schedule-tab-0" aria-live="polite"></ul>
+    </div>
+  </section>
+
+  <!-- E-CHITS -->
+  <section id="echits" class="section">
+    <span class="num">04</span>
+    <h2>E-Chits</h2>
+
+    <div class="card login" id="ec-login">
+      <div>
+        <h3 class="gold-text">Enter your access code</h3>
+        <p class="muted">Your code looks like <b>DEL12345</b>, <b>CHR12345</b> or <b>ADN12345</b>.</p>
+      </div>
+      <form id="login-form" autocomplete="on">
+        <label class="sr-only" for="code-input">Access code</label>
+        <input id="code-input" name="access-code" type="text" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="8" pattern="(DEL|CHR|ADN)[0-9]{5}" placeholder="e.g. DEL12345" aria-describedby="code-hint login-err" required>
+        <button class="btn gold" type="submit">Log in</button>
+        <p class="sr-only" id="code-hint">Enter your eight-character delegate, chair, or admin access code.</p>
+        <p class="err" id="login-err" role="alert" aria-live="assertive"></p>
+      </form>
+    </div>
+
+    <div class="card" id="ec-app" hidden>
+      <div class="who">
+        <div>
+          <h3 class="gold-text" id="who-name"></h3>
+          <p class="muted"><span id="who-role"></span> · <span id="who-code"></span></p>
+        </div>
+        <button class="btn ghost small" id="logout">Log out</button>
+      </div>
+
+      <p class="ec-status" id="ec-status" role="status" aria-live="polite"></p>
+
+      <div class="tabs" id="ec-tabs" role="tablist" aria-label="E-Chits">
+        <button type="button" role="tab" id="tab-inbox" aria-selected="true" aria-controls="panel-inbox" data-tab="inbox" class="on">Inbox <i id="cnt-inbox">0</i></button>
+        <button type="button" role="tab" id="tab-compose" aria-selected="false" aria-controls="panel-compose" data-tab="compose">Compose</button>
+        <button type="button" role="tab" id="tab-sent" aria-selected="false" aria-controls="panel-sent" data-tab="sent">Sent</button>
+        <button type="button" role="tab" id="tab-queue" aria-selected="false" aria-controls="panel-queue" data-tab="queue" hidden>Approvals <i id="cnt-queue">0</i></button>
+      </div>
+
+      <div class="ec-panel" id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox" tabindex="0" data-panel="inbox"></div>
+      <div class="ec-panel" id="panel-sent" role="tabpanel" aria-labelledby="tab-sent" tabindex="0" data-panel="sent" hidden></div>
+      <div class="ec-panel" id="panel-queue" role="tabpanel" aria-labelledby="tab-queue" tabindex="0" data-panel="queue" hidden></div>
+
+      <div class="ec-panel" id="panel-compose" role="tabpanel" aria-labelledby="tab-compose" tabindex="0" data-panel="compose" hidden>
+        <form id="compose-form" class="compose">
+          <input id="reply-to-id" type="hidden">
+          <label>Type
+            <select id="kind"></select>
+          </label>
+          <label id="to-wrap">To
+            <select id="to"></select>
+          </label>
+          <label>Subject
+            <input id="subject" maxlength="120" required>
+          </label>
+          <label>Message
+            <textarea id="body" rows="6" maxlength="2000" required></textarea>
+          </label>
+          <p class="muted" id="kind-hint"></p>
+          <button class="btn gold" type="submit">Send</button>
+          <p class="ok" id="send-msg" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- WELLNESS -->
+  <section id="wellness" class="section">
+    <span class="num">05</span>
+    <h2>Delegate<br>Wellness</h2>
+    <div class="card well">
+      <div>
+        <h3 class="gold-text">Quick reset</h3>
+        <p class="muted">Take a moment between sessions.</p>
+        <p><b id="well-count">0 of 3 checked today.</b></p>
+      </div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" data-w="water"> Water</label>
+        <label class="check"><input type="checkbox" data-w="stretch"> Stretch</label>
+        <label class="check"><input type="checkbox" data-w="breathe"> Breathe</label>
+      </div>
+      <p class="muted small-note">Saved on this device for today.</p>
+    </div>
+  </section>
+</main>
+
+<footer id="contact" inert>
+  <p class="display">DXBMUN 27'</p>
+  <p class="muted">For questions, contact the DXBMUN organizing team through your school or official conference channels.</p>
+</footer>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

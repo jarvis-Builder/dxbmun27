@@ -1,4 +1,5 @@
 import csv
+import io
 import os
 import re
 import sqlite3
@@ -6,22 +7,32 @@ import time
 
 from flask import Flask, g, jsonify, render_template, request, session
 
-app = Flask(__name__)
+BASE = os.path.dirname(os.path.abspath(__file__))
+IS_VERCEL = os.environ.get("VERCEL") == "1"
+DATABASE_URL = os.environ.get("DATABASE_URL")
+app = Flask(
+    __name__,
+    static_folder=None if IS_VERCEL else os.path.join(BASE, "public"),
+    static_url_path="" if not IS_VERCEL else None,
+)
 LOCAL_RUN = __name__ == "__main__"
 DEBUG_MODE = os.environ.get("FLASK_DEBUG") == "1"
 LOCAL_MODE = LOCAL_RUN or DEBUG_MODE
 secret_key = os.environ.get("SECRET_KEY")
 if not secret_key and not LOCAL_MODE:
     raise RuntimeError("Set SECRET_KEY before starting the application outside local debug mode")
+if IS_VERCEL and not DATABASE_URL:
+    raise RuntimeError("Set DATABASE_URL to a persistent PostgreSQL database for Vercel")
+if IS_VERCEL and not os.environ.get("USERS_CSV"):
+    raise RuntimeError("Set USERS_CSV to the private conference user list for Vercel")
 app.secret_key = secret_key or "dev-only-change-me"
 app.config.update(
     MAX_CONTENT_LENGTH=16 * 1024,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE") == "1",
+    SESSION_COOKIE_SECURE=IS_VERCEL or os.environ.get("SESSION_COOKIE_SECURE") == "1",
 )
 
-BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE, "echits.db"))
 CODE_RE = re.compile(r"^(DEL|CHR|ADN)\d{5}$")
 ROLES = {"DEL": "delegate", "CHR": "chair", "ADN": "admin"}
@@ -29,10 +40,32 @@ FAILS = {}  # ip -> list of failed login times
 
 
 # ---------- database ----------
+def connect_db():
+    if DATABASE_URL:
+        import psycopg
+        from psycopg.rows import dict_row
+
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    return sqlite3.connect(DB_PATH)
+
+
+def db_execute(db, sql, args=()):
+    if DATABASE_URL:
+        sql = sql.replace("?", "%s")
+    return db.execute(sql, args)
+
+
+def db_executemany(db, sql, args):
+    if DATABASE_URL:
+        sql = sql.replace("?", "%s")
+    return db.executemany(sql, args)
+
+
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
+        g.db = connect_db()
+        if not DATABASE_URL:
+            g.db.row_factory = sqlite3.Row
     return g.db
 
 
@@ -43,7 +76,12 @@ def close_db(_exc):
         db.close()
 
 
-def find_users_file():
+def load_users():
+    csv_contents = os.environ.get("USERS_CSV")
+    if csv_contents is not None:
+        reader = csv.DictReader(io.StringIO(csv_contents))
+        return parse_users(reader)
+
     candidates = (
         os.environ.get("USERS_FILE"),
         "/etc/secrets/users.csv",           # Render "Secret File" (your real list)
@@ -53,33 +91,58 @@ def find_users_file():
         candidates += (os.path.join(BASE, "users.sample.csv"),)
     for path in candidates:
         if path and os.path.exists(path):
-            return path
-    raise FileNotFoundError("No users.csv found. Set USERS_FILE or provide a users.csv file.")
+            with open(path, newline="", encoding="utf-8-sig") as f:
+                return parse_users(csv.DictReader(f))
+    raise FileNotFoundError("No users.csv or users.sample.csv found")
+
+
+def parse_users(reader):
+    required_columns = {"code", "name", "committee", "country"}
+    if not reader.fieldnames or not required_columns.issubset(reader.fieldnames):
+        raise ValueError("users.csv must contain code,name,committee,country columns")
+    users = []
+    for row in reader:
+        code = re.sub(r"\s+", "", row.get("code") or "").upper()
+        if not CODE_RE.match(code):
+            continue
+        users.append((
+            code, (row.get("name") or "").strip(), ROLES[code[:3]],
+            (row.get("committee") or "").strip().upper(),
+            (row.get("country") or "").strip(),
+        ))
+    if not users:
+        raise ValueError("users.csv does not contain any valid access codes")
+    return users
 
 
 def init_db():
-    with open(find_users_file(), newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        required_columns = {"code", "name", "committee", "country"}
-        if not reader.fieldnames or not required_columns.issubset(reader.fieldnames):
-            raise ValueError("users.csv must contain code,name,committee,country columns")
-        users = []
-        for row in reader:
-            code = re.sub(r"\s+", "", row.get("code") or "").upper()
-            if not CODE_RE.match(code):
-                continue
-            users.append((
-                code, (row.get("name") or "").strip(), ROLES[code[:3]],
-                (row.get("committee") or "").strip().upper(),
-                (row.get("country") or "").strip(),
-            ))
-    if not users:
-        raise ValueError("users.csv does not contain any valid access codes")
-
-    con = sqlite3.connect(DB_PATH)
+    users = load_users()
+    con = connect_db()
     try:
-        con.executescript(
-            """
+        if DATABASE_URL:
+            db_execute(
+                con,
+                """
+                CREATE TABLE IF NOT EXISTS users(
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    code TEXT UNIQUE NOT NULL, name TEXT, role TEXT, committee TEXT, country TEXT
+                )
+                """,
+            )
+            db_execute(
+                con,
+                """
+                CREATE TABLE IF NOT EXISTS messages(
+                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    sender TEXT, recipient TEXT, committee TEXT, kind TEXT, subject TEXT, body TEXT,
+                    status TEXT, note TEXT, created BIGINT
+                )
+                """,
+            )
+            db_execute(con, "SELECT pg_advisory_xact_lock(27027)")
+        else:
+            con.executescript(
+                """
             CREATE TABLE IF NOT EXISTS users(
                 code TEXT PRIMARY KEY, name TEXT, role TEXT, committee TEXT, country TEXT);
             CREATE TABLE IF NOT EXISTS messages(
@@ -87,9 +150,13 @@ def init_db():
                 committee TEXT, kind TEXT, subject TEXT, body TEXT,
                 status TEXT, note TEXT, created INTEGER);
             """
+            )
+        db_execute(con, "DELETE FROM users")
+        db_executemany(
+            con,
+            "INSERT INTO users(code,name,role,committee,country) VALUES (?,?,?,?,?)",
+            users,
         )
-        con.execute("DELETE FROM users")
-        con.executemany("INSERT OR REPLACE INTO users VALUES (?,?,?,?,?)", users)
         con.commit()
     finally:
         con.close()
@@ -103,7 +170,7 @@ def current_user():
     code = session.get("code")
     if not code:
         return None
-    return get_db().execute("SELECT * FROM users WHERE code=?", (code,)).fetchone()
+    return db_execute(get_db(), "SELECT * FROM users WHERE code=?", (code,)).fetchone()
 
 
 def need_login(roles=None):
@@ -120,7 +187,7 @@ def user_dict(u):
 
 
 def rows(sql, args=()):
-    return [dict(r) for r in get_db().execute(sql, args).fetchall()]
+    return [dict(r) for r in db_execute(get_db(), sql, args).fetchall()]
 
 
 def client_ip():
@@ -160,7 +227,7 @@ def login():
     if not isinstance(raw, str):
         return jsonify(error="Enter a valid access code"), 400
     code = re.sub(r"\s+", "", raw).upper()
-    u = get_db().execute("SELECT * FROM users WHERE code=?", (code,)).fetchone()
+    u = db_execute(get_db(), "SELECT * FROM users WHERE code=?", (code,)).fetchone()
     if not u:
         FAILS[ip].append(now)
         return jsonify(error="Code not recognised. Check it and try again."), 401
@@ -186,11 +253,12 @@ def directory():
     u, err = need_login()
     if err:
         return err
+    user_id = "id" if DATABASE_URL else "rowid"
     if u["role"] == "admin":
-        data = rows("SELECT rowid AS id, name, role, country, committee FROM users "
+        data = rows(f"SELECT {user_id} AS id, name, role, country, committee FROM users "
                     "WHERE code != ? ORDER BY committee, role, name", (u["code"],))
     else:
-        data = rows("SELECT rowid AS id, name, role, country, committee FROM users "
+        data = rows(f"SELECT {user_id} AS id, name, role, country, committee FROM users "
                     "WHERE (committee=? OR role='admin') AND code != ? ORDER BY role, name",
                     (u["committee"], u["code"]))
     return jsonify(data)
@@ -223,7 +291,7 @@ def send():
     if kind in ("directive", "resolution"):
         if u["role"] != "delegate":
             return jsonify(error="Only delegates submit directives/resolutions"), 403
-        chair = db.execute("SELECT code FROM users WHERE role='chair' AND committee=?",
+        chair = db_execute(db, "SELECT code FROM users WHERE role='chair' AND committee=?",
                            (u["committee"],)).fetchone()
         if not chair:
             return jsonify(error="No chair is assigned to your committee yet"), 400
@@ -235,20 +303,23 @@ def send():
                 original_id = int(reply_to)
             except (TypeError, ValueError):
                 return jsonify(error="That chit cannot be replied to"), 400
-            original = db.execute(
+            original = db_execute(db,
                 "SELECT sender FROM messages "
                 "WHERE id=? AND recipient=? AND kind='chit' AND status IN ('delivered','approved')",
                 (original_id, u["code"]),
             ).fetchone()
             if not original:
                 return jsonify(error="That chit is no longer available to reply to"), 400
-            target = db.execute("SELECT * FROM users WHERE code=?", (original["sender"],)).fetchone()
+            target = db_execute(db, "SELECT * FROM users WHERE code=?", (original["sender"],)).fetchone()
         else:
             try:
                 to_id = int(d.get("to"))
             except (TypeError, ValueError):
                 return jsonify(error="Pick a recipient"), 400
-            target = db.execute("SELECT * FROM users WHERE rowid=?", (to_id,)).fetchone()
+            user_id = "id" if DATABASE_URL else "rowid"
+            target = db_execute(
+                db, f"SELECT {user_id} AS id, * FROM users WHERE {user_id}=?", (to_id,)
+            ).fetchone()
         if not target or target["code"] == u["code"]:
             return jsonify(error="Pick a valid recipient"), 400
         if u["role"] != "admin" and target["role"] != "admin" and target["committee"] != u["committee"]:
@@ -258,7 +329,8 @@ def send():
         # delegate -> delegate chits need chair approval; everything else is instant
         status = "pending" if (u["role"] == "delegate" and target["role"] == "delegate") else "delivered"
 
-    db.execute(
+    db_execute(
+        db,
         "INSERT INTO messages(sender,recipient,committee,kind,subject,body,status,note,created) "
         "VALUES (?,?,?,?,?,?,?,?,?)",
         (u["code"], recipient, committee, kind, subject, body, status, "", int(time.time())),
@@ -312,12 +384,13 @@ def review():
         return jsonify(error="Unknown action"), 400
 
     db = get_db()
-    m = db.execute("SELECT * FROM messages WHERE id=?", (mid,)).fetchone()
+    m = db_execute(db, "SELECT * FROM messages WHERE id=?", (mid,)).fetchone()
     if not m or m["status"] != "pending":
         return jsonify(error="That message is no longer pending"), 400
     if u["role"] == "chair" and m["committee"] != u["committee"]:
         return jsonify(error="Not your committee"), 403
-    result = db.execute(
+    result = db_execute(
+        db,
         "UPDATE messages SET status=?, note=? WHERE id=? AND status='pending'",
         ("approved" if action == "approve" else "rejected", note, mid),
     )

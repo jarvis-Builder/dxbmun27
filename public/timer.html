@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Floor timer – DXB MUN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/home.css">
+<link rel="stylesheet" href="css/timer.css">
+<script src="js/timer.js" defer></script>
+</head>
+<body class="timer-page">
+<header class="timer-nav">
+<a class="logo disp" href="/">DXB <span>MUN</span></a>
+<a class="btn ghost sm" href="/">Back to website</a>
+</header>
+
+<main class="timer-main">
+<section class="timer-sec">
+<div class="wrap">
+<div class="timer-page-head">
+<p class="eyebrow disp">DXB MUN · Debate tools</p>
+<h1 class="disp">Floor timer</h1>
+</div>
+<div class="timer-shell timer-single">
+<div class="timer-clock">
+<p class="timer-kicker disp">General speakers list</p>
+<p class="timer-wheel-instruction">Scroll, swipe, or use arrow keys to set the duration.</p>
+<div class="timer-presets" role="group" aria-label="Common speaking time presets">
+<button class="timer-preset" type="button" data-duration="30" aria-pressed="false">0:30</button>
+<button class="timer-preset is-active" type="button" data-duration="60" aria-pressed="true">1:00</button>
+<button class="timer-preset" type="button" data-duration="90" aria-pressed="false">1:30</button>
+<button class="timer-preset" type="button" data-duration="120" aria-pressed="false">2:00</button>
+<button class="timer-preset" type="button" data-duration="180" aria-pressed="false">3:00</button>
+</div>
+<div class="timer-wheel-picker" aria-label="Set timer duration">
+<div class="timer-wheel-unit">
+<span class="timer-wheel-label" id="minutes-label">Minutes</span>
+<div class="timer-wheel" id="timer-minutes" role="listbox" aria-labelledby="minutes-label" aria-label="Minutes" aria-disabled="false" aria-activedescendant="timer-minutes-option-1" tabindex="0"><div class="timer-wheel-in"></div></div>
+</div>
+<span class="timer-wheel-colon disp" aria-hidden="true">:</span>
+<div class="timer-wheel-unit">
+<span class="timer-wheel-label" id="seconds-label">Seconds</span>
+<div class="timer-wheel" id="timer-seconds" role="listbox" aria-labelledby="seconds-label" aria-label="Seconds" aria-disabled="false" aria-activedescendant="timer-seconds-option-0" tabindex="0"><div class="timer-wheel-in"></div></div>
+</div>
+</div>
+<p class="timer-remaining" id="timer-remaining">Time remaining: 01:00</p>
+<p class="timer-state" id="timer-state" role="status" aria-live="polite">Ready when you are.</p>
+<div class="timer-actions">
+<button class="btn" id="timer-start" type="button">Start</button>
+<button class="btn ghost" id="timer-reset" type="button">Reset</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+</body>
+</html>

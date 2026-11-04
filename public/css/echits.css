@@ -1,0 +1,201 @@
+.echits-sec {
+  color: var(--fg);
+  background: linear-gradient(145deg, var(--maroon-d), var(--ink) 70%);
+}
+
+.echits-sec .head {
+  margin-bottom: 28px;
+}
+
+.echits-card {
+  max-width: 1040px;
+  padding: clamp(22px, 4vw, 40px);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: var(--r);
+  background: rgba(0, 0, 0, .28);
+}
+
+.echits-sec .login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 30px;
+  align-items: center;
+}
+
+.echits-sec h3 {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: 1;
+}
+
+.echits-sec p {
+  color: var(--muted);
+}
+
+.echits-sec label {
+  display: block;
+  margin: 0 0 14px;
+  color: var(--cream);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.echits-sec input,
+.echits-sec select,
+.echits-sec textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 13px 15px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, .35);
+  color: var(--fg);
+  font: inherit;
+}
+
+.echits-sec input:focus-visible,
+.echits-sec select:focus-visible,
+.echits-sec textarea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.echits-sec #code-input {
+  max-width: 360px;
+  letter-spacing: .22em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.echits-error,
+.echits-sec #send-msg.err {
+  min-height: 1.5em;
+  color: var(--pop);
+}
+
+.echits-sec #send-msg.ok {
+  color: #a4e7a4;
+}
+
+.echits-sec .who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.echits-sec .who h3 {
+  overflow-wrap: anywhere;
+}
+
+.echits-sec .ec-status:empty {
+  display: none;
+}
+
+.echits-sec .ec-status {
+  margin-bottom: 16px;
+}
+
+.echits-sec .ec-tabs {
+  margin: 0 0 24px;
+}
+
+.echits-sec .ec-panel {
+  max-height: 560px;
+  overflow: auto;
+}
+
+.echits-sec .compose {
+  max-width: 680px;
+}
+
+.echits-sec .msg {
+  margin: 0 0 12px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, .24);
+}
+
+.echits-sec .msg-top,
+.echits-sec .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.echits-sec .msg-top {
+  margin-bottom: 8px;
+}
+
+.echits-sec .tag {
+  padding: 3px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.echits-sec .tag.approved,
+.echits-sec .tag.delivered {
+  border-color: #8be28b;
+  color: #8be28b;
+}
+
+.echits-sec .tag.rejected {
+  border-color: var(--pop);
+  color: var(--pop);
+}
+
+.echits-sec .msg h4 {
+  margin: 4px 0;
+  font-size: 18px;
+}
+
+.echits-sec .msg .meta {
+  font-size: 12px;
+}
+
+.echits-sec .msg .body {
+  margin-top: 8px;
+  color: var(--cream);
+  white-space: pre-wrap;
+}
+
+.echits-sec .msg .note {
+  margin-top: 8px;
+  color: var(--accent);
+  font-style: italic;
+}
+
+.echits-sec .actions {
+  margin-top: 12px;
+}
+
+.echits-sec .actions input {
+  flex: 1 1 200px;
+  margin: 0;
+}
+
+.echits-sec .empty {
+  padding: 20px 0;
+}
+
+@media (max-width: 700px) {
+  .echits-sec .login {
+    grid-template-columns: 1fr;
+  }
+
+  .echits-sec .ec-tabs button {
+    min-height: 44px;
+    padding: 0 16px;
+    font-size: 16px;
+  }
+}

@@ -1,198 +1,276 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DXBMUN 27'</title>
-  <meta name="description" content="Explore DXBMUN 27' committees, conference schedule and delegate E-Chits platform.">
-  <meta name="theme-color" content="#1a0408">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body class="intro-active">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DXB MUN</title>
 
-<section class="cinematic" id="cinematic" role="dialog" aria-modal="true" aria-labelledby="cinematic-title" tabindex="-1">
-  <div class="cinematic-content">
-    <p class="cinematic-kicker">Dubai · 2027</p>
-    <div class="cinematic-seal" aria-hidden="true">
-      <span class="seal-orbit"></span>
-      <span class="seal-star">✦</span>
-    </div>
-    <h1 class="cinematic-title" id="cinematic-title"><span>DXB</span><span class="cinematic-outline">MUN</span></h1>
-    <p class="cinematic-tagline">Diplomacy around us</p>
-    <div class="cinematic-progress" aria-hidden="true"><span></span></div>
-  </div>
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- Our own files (the homepage has its own stylesheet; portal pages use css/style.css) -->
+<link rel="stylesheet" href="css/home.css">
+<link rel="stylesheet" href="css/echits.css">
+<script src="js/main.js" defer></script>
+<script src="js/wellness.js" defer></script>
+<script src="js/echits.js" defer></script>
+</head>
+<body>
+
+<!-- Navigation -->
+<header class="nav" id="top">
+<a class="logo disp" href="#home">DXB <span>MUN</span></a>
+<button class="burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="links">
+<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+</button>
+<nav class="links" id="links" aria-label="Main">
+<a href="#home" class="on">Home</a><a href="#about">About</a><a href="#committees">Committees</a><a href="#schedule">Schedule</a><a href="timer.html">Timer</a><a href="#echits">E-Chits</a><a href="#wellness">Wellness</a><a href="#resources">Resources</a><a href="#contact">Contact</a>
+</nav>
+</header>
+
+<main>
+
+<!-- Home: the photo comes from css/home.css (--photo) -->
+<section class="hero" id="home">
+<div class="blob b1" aria-hidden="true"></div>
+<div class="blob b2" aria-hidden="true"></div>
+<div class="hero-in">
+<div class="copy">
+<p class="kicker disp">Model United Nations · Dubai</p>
+<h1 class="disp">DXB MUN</h1>
+<p class="tagline disp">DXB MUN 2027</p>
+<div class="actions">
+<a class="btn" href="#committees">Explore committees</a>
+<a class="btn ghost" href="#schedule">See the schedule</a>
+</div>
+</div>
+<div class="visual">
+<div class="frame"><div class="photo" role="img" aria-label="Delegates carrying national flags on stage at an MUN summit"></div></div>
+<svg class="badge" viewBox="0 0 200 200" aria-hidden="true">
+<defs><path id="circ" d="M100,100 m-72,0 a72,72 0 1,1 144,0 a72,72 0 1,1 -144,0"/></defs>
+<circle class="bg" cx="100" cy="100" r="98"/>
+<text><textPath href="#circ" textLength="440" lengthAdjust="spacing">DIPLOMACY AROUND US • INDIAN HIGH SCHOOL • </textPath></text>
+<circle cx="100" cy="100" r="30" fill="#7A1425"/>
+<path d="M100 82l5 12 13 1-10 9 3 13-11-7-11 7 3-13-10-9 13-1z" fill="#F2B705"/>
+</svg>
+<span class="chip c1">19 committees</span>
+<span class="chip c2">3 days</span>
+</div>
+</div>
+<div class="hero-foot"><span>© 2027 DXB MUN</span><span><a href="#contact"></a><a href="#contact"></a></span></div>
 </section>
 
-<a class="skip-link" href="#main-content">Skip to content</a>
-<nav class="nav" aria-label="Main navigation" inert>
-  <a href="#home" class="logo"><span class="logo-box">DXB <b>MUN</b></span></a>
-  <div class="links">
-    <a href="#home">Home</a>
-    <a href="#about">About</a>
-    <a href="#committees">Committees</a>
-    <a href="#schedule">Schedule</a>
-    <a href="#echits">E-Chits</a>
-    <a href="#wellness">Wellness</a>
-    <a href="#contact">Contact</a>
-  </div>
-</nav>
+<!-- Scrolling strip of committees (filled in by js/main.js) -->
+<div class="marquee" aria-hidden="true"><div class="track" id="track"></div></div>
 
-<main id="main-content" inert>
-  <!-- HOME -->
-  <section id="home" class="hero">
-    <div class="hero-text">
-      <p class="kicker">Model United Nations · Dubai</p>
-      <h1><span class="solid">DXB</span><span class="outline">MUN</span></h1>
-      <p class="year">DXBMUN 27'</p>
-      <div class="btns">
-        <a class="btn gold" href="#committees">Explore committees</a>
-        <a class="btn ghost" href="#schedule">See the schedule</a>
-      </div>
-    </div>
-    <div class="hero-art">
-      <div class="photo">
-        <img src="{{ url_for('static', filename='hero.svg') }}" alt="Illustration of delegates gathered around a conference table beneath a globe.">
-      </div>
-      <span class="badge coral"><span class="committee-count">22</span> Committees</span>
-      <span class="badge white">3 Days</span>
-      <svg class="seal" viewBox="0 0 200 200" aria-hidden="true">
-        <circle cx="100" cy="100" r="98" fill="#f2b705"/>
-        <defs><path id="circ" d="M100,100 m-72,0 a72,72 0 1,1 144,0 a72,72 0 1,1 -144,0"/></defs>
-        <text class="seal-text"><textPath href="#circ">DXBMUN 27' · DIPLOMACY AROUND US · DUBAI ·</textPath></text>
-        <circle cx="100" cy="100" r="30" fill="#6b1020"/>
-        <polygon points="100,82 105,95 119,95 108,103 112,117 100,109 88,117 92,103 81,95 95,95" fill="#f2b705"/>
-      </svg>
-    </div>
-  </section>
+<!-- Numbers -->
+<div class="stats">
+<div><b class="disp" data-count="19">19</b><span>Committees</span></div>
+<div><b class="disp" data-count="3">3</b><span>Days</span></div>
+<div><b class="disp" data-count="6">6</b><span>Committee sessions</span></div>
+<div><b class="disp" data-count="2027">2027</b><span>Dubai</span></div>
+</div>
 
-  <!-- ABOUT -->
-  <section id="about" class="section">
-    <span class="num">01</span>
-    <h2>About</h2>
-    <div class="card">
-      <p>DXBMUN 27' brings delegates together in Dubai for three days of debate, diplomacy and
-      problem-solving. Explore <span class="committee-count">22</span> committees, write resolutions, negotiate with allies and find out how
-      much one voice can change.</p>
-      <p class="muted">Committee agendas and schedule details may be updated by the conference organizers.</p>
-    </div>
-  </section>
+<!-- About -->
+<section class="sec about-sec" id="about">
+<div class="wrap two">
+<div>
+<div class="head"><p class="eyebrow disp">01</p><h2 class="disp">About</h2></div>
+<div class="cards">
+<article class="card"><p class="disp big">Diplomacy around us</p></article>
+<article class="card alt"><p class="disp big">Indian High School</p></article>
+</div>
+</div>
+<div class="sticker" data-base="rotate(-4deg)"><div class="photo" aria-hidden="true"></div></div>
+</div>
+</section>
 
-  <!-- COMMITTEES -->
-  <section id="committees" class="section">
-    <span class="num">02</span>
-    <h2>Committees</h2>
-    <div class="card pin">
-      <div class="pin-info" id="pin-info" aria-live="polite"></div>
-      <div class="pin-side">
-        <div class="wheel" id="wheel" tabindex="0" role="group" aria-label="Committee selector. Use arrow keys, scroll, drag, or select a visible committee."></div>
-        <p class="hint">Scroll · Drag · Select · Use arrow keys</p>
-        <p class="ticket" id="ticket" aria-live="polite"></p>
-      </div>
-    </div>
-  </section>
+<!-- Committees: scroll, drag, or tap the wheel to browse -->
+<section class="sec cm-sec" id="committees">
+<div class="wrap">
+<div class="head"><p class="eyebrow disp">02</p><h2 class="disp">Committees</h2></div>
 
-  <!-- SCHEDULE -->
-  <section id="schedule" class="section">
-    <span class="num">03</span>
-    <h2>Schedule</h2>
-    <div class="card">
-      <div class="tabs" id="day-tabs" role="tablist" aria-label="Conference day"></div>
-      <ul class="timeline" id="timeline" role="tabpanel" aria-labelledby="schedule-tab-0" aria-live="polite"></ul>
-    </div>
-  </section>
+<div class="spot" id="spot">
+<div class="wheel-box">
+<div class="wheel" id="wheel" role="listbox" aria-label="Committee selection wheel" aria-activedescendant="wheel-option-0" tabindex="0"><div class="wheel-in" id="wheel-in"></div></div>
+<p class="hint">Scroll · Drag · Tap · Use arrow keys</p>
+</div>
+<div>
+<p class="cm-idx disp" id="cm-idx">01 / 19</p>
+<h3 class="cm-a disp" id="cm-a">IPMC</h3>
+<p class="cm-n disp" id="cm-n">Indian Prime Minister’s Cabinet</p>
+<div class="spot-actions">
+<button class="btn sm" id="prev" type="button" aria-label="Previous committee">←</button>
+<button class="btn sm" id="next" type="button" aria-label="Next committee">→</button>
+<button class="btn ghost sm" id="shuffle" type="button">Surprise me</button>
+</div>
+</div>
+</div>
 
-  <!-- E-CHITS -->
-  <section id="echits" class="section">
-    <span class="num">04</span>
-    <h2>E-Chits</h2>
+<div class="toolbar" hidden>
+<input class="cm-search" id="cm-search" type="search" placeholder="Search committees…" aria-label="Search committees" autocomplete="off">
+<p class="cm-none" id="cm-none" hidden>No match</p>
+</div>
 
-    <div class="card login" id="ec-login">
-      <div>
-        <h3 class="gold-text">Enter your access code</h3>
-        <p class="muted">Your code looks like <b>DEL12345</b>, <b>CHR12345</b> or <b>ADN12345</b>.</p>
-      </div>
-      <form id="login-form" autocomplete="on">
-        <label class="sr-only" for="code-input">Access code</label>
-        <input id="code-input" name="access-code" type="text" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="8" pattern="(DEL|CHR|ADN)[0-9]{5}" placeholder="e.g. DEL12345" aria-describedby="code-hint login-err" required>
-        <button class="btn gold" type="submit">Log in</button>
-        <p class="sr-only" id="code-hint">Enter your eight-character delegate, chair, or admin access code.</p>
-        <p class="err" id="login-err" role="alert" aria-live="assertive"></p>
-      </form>
-    </div>
+<div class="grid" id="rail" role="group" aria-label="Committees" hidden>
+<button type="button" data-a="IPMC" data-n="Indian Prime Minister’s Cabinet" aria-current="true"><b>IPMC</b><small>Indian Prime Minister’s Cabinet</small></button>
+<button type="button" data-a="HCC" data-n="Historic Crisis Committee"><b>HCC</b><small>Historic Crisis Committee</small></button>
+<button type="button" data-a="IPC" data-n="International Press Corps"><b>IPC</b><small>International Press Corps</small></button>
+<button type="button" data-a="WHO" data-n="World Health Organization"><b>WHO</b><small>World Health Organization</small></button>
+<button type="button" data-a="ECOSOC" data-n="Economic and Social Council"><b>ECOSOC</b><small>Economic and Social Council</small></button>
+<button type="button" data-a="AU" data-n="African Union"><b>AU</b><small>African Union</small></button>
+<button type="button" data-a="EU" data-n="European Union"><b>EU</b><small>European Union</small></button>
+<button type="button" data-a="ICJ" data-n="International Court of Justice"><b>ICJ</b><small>International Court of Justice</small></button>
+<button type="button" data-a="DISEC" data-n="Disarmament and International Security Committee"><b>DISEC</b><small>Disarmament and International Security Committee</small></button>
+<button type="button" data-a="UNODC" data-n="United Nations Office on Drugs and Crime"><b>UNODC</b><small>United Nations Office on Drugs and Crime</small></button>
+<button type="button" data-a="UNEP" data-n="United Nations Environment Program"><b>UNEP</b><small>United Nations Environment Program</small></button>
+<button type="button" data-a="UNOOSA" data-n="United Nations Office for Outer Space Affairs"><b>UNOOSA</b><small>United Nations Office for Outer Space Affairs</small></button>
+<button type="button" data-a="UNSC" data-n="United Nations Security Council"><b>UNSC</b><small>United Nations Security Council</small></button>
+<button type="button" data-a="UNHRC" data-n="United Nations Human Rights Council"><b>UNHRC</b><small>United Nations Human Rights Council</small></button>
+<button type="button" data-a="UNCSW" data-n="United Nations Commission on the Status of Women"><b>UNCSW</b><small>United Nations Commission on the Status of Women</small></button>
+<button type="button" data-a="UNCSTD" data-n="United Nations Commission on Science and Technology for Development"><b>UNCSTD</b><small>United Nations Commission on Science and Technology for Development</small></button>
+<button type="button" data-a="SOCHUM" data-n="Social, Humanitarian, and Cultural Committee"><b>SOCHUM</b><small>Social, Humanitarian, and Cultural Committee</small></button>
+<button type="button" data-a="INTERPOL" data-n="International Criminal Police Organization"><b>INTERPOL</b><small>International Criminal Police Organization</small></button>
+<button type="button" data-a="NATO" data-n="North Atlantic Treaty Organization"><b>NATO</b><small>North Atlantic Treaty Organization</small></button>
+</div>
+</div>
+</section>
 
-    <div class="card" id="ec-app" hidden>
-      <div class="who">
-        <div>
-          <h3 class="gold-text" id="who-name"></h3>
-          <p class="muted"><span id="who-role"></span> · <span id="who-code"></span></p>
-        </div>
-        <button class="btn ghost small" id="logout">Log out</button>
-      </div>
+<!-- Schedule: edit the sessions and times here. Each <ol> is one day; the Day buttons switch between them. -->
+<section class="sec sched" id="schedule">
+<div class="wrap">
+<div class="head"><p class="eyebrow disp">03</p><h2 class="disp">Schedule</h2></div>
+<div class="tabs" role="tablist" aria-label="Conference days">
+<button type="button" role="tab" id="tab-1" aria-selected="true" aria-controls="day-1" data-day="1">Day 1</button>
+<button type="button" role="tab" id="tab-2" aria-selected="false" aria-controls="day-2" data-day="2">Day 2</button>
+<button type="button" role="tab" id="tab-3" aria-selected="false" aria-controls="day-3" data-day="3">Day 3</button>
+</div>
 
-      <p class="ec-status" id="ec-status" role="status" aria-live="polite"></p>
+<ol class="tl" id="day-1" role="tabpanel" aria-labelledby="tab-1">
+<li><span class="tm">12:30 PM – 1:30 PM</span><span class="nm">Registration</span><span class="du">1 hour</span></li>
+<li><span class="tm">1:30 PM – 2:30 PM</span><span class="nm">Opening Ceremony</span><span class="du">1 hour</span></li>
+<li><span class="tm">2:30 PM – 3:00 PM</span><span class="nm">ROP Briefing</span><span class="du">30 minutes</span></li>
+<li><span class="tm">3:00 PM – 4:00 PM</span><span class="nm">Break</span><span class="du">1 hour</span></li>
+<li><span class="tm">4:00 PM – 5:30 PM</span><span class="nm">Committee Session 1</span><span class="du">1 hour 30 minutes</span></li>
+<li><span class="tm">5:30 PM</span><span class="nm">Dispersal</span><span class="du">30 minutes</span></li>
+</ol>
 
-      <div class="tabs" id="ec-tabs" role="tablist" aria-label="E-Chits">
-        <button type="button" role="tab" id="tab-inbox" aria-selected="true" aria-controls="panel-inbox" data-tab="inbox" class="on">Inbox <i id="cnt-inbox">0</i></button>
-        <button type="button" role="tab" id="tab-compose" aria-selected="false" aria-controls="panel-compose" data-tab="compose">Compose</button>
-        <button type="button" role="tab" id="tab-sent" aria-selected="false" aria-controls="panel-sent" data-tab="sent">Sent</button>
-        <button type="button" role="tab" id="tab-queue" aria-selected="false" aria-controls="panel-queue" data-tab="queue" hidden>Approvals <i id="cnt-queue">0</i></button>
-      </div>
+<ol class="tl" id="day-2" role="tabpanel" aria-labelledby="tab-2" hidden>
+<li><span class="tm">9:00 AM – 9:30 AM</span><span class="nm">Registration</span><span class="du">30 minutes</span></li>
+<li><span class="tm">9:30 AM – 11:15 AM</span><span class="nm">Committee Session 2</span><span class="du">1 hour 45 minutes</span></li>
+<li><span class="tm">11:15 AM – 11:45 AM</span><span class="nm">Break</span><span class="du">30 minutes</span></li>
+<li><span class="tm">11:45 AM – 1:30 PM</span><span class="nm">Committee Session 3</span><span class="du">1 hour 45 minutes</span></li>
+<li><span class="tm">1:30 PM – 2:30 PM</span><span class="nm">Lunch</span><span class="du">1 hour</span></li>
+<li><span class="tm">2:30 PM – 4:30 PM</span><span class="nm">Committee Session 4</span><span class="du">2 hours</span></li>
+<li><span class="tm">4:30 PM – 7:00 PM</span><span class="nm">Socials</span><span class="du">2 hours 30 minutes</span></li>
+<li><span class="tm">7:00 PM</span><span class="nm">Dispersal</span><span class="du">30 minutes</span></li>
+</ol>
 
-      <div class="ec-panel" id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox" tabindex="0" data-panel="inbox"></div>
-      <div class="ec-panel" id="panel-sent" role="tabpanel" aria-labelledby="tab-sent" tabindex="0" data-panel="sent" hidden></div>
-      <div class="ec-panel" id="panel-queue" role="tabpanel" aria-labelledby="tab-queue" tabindex="0" data-panel="queue" hidden></div>
+<ol class="tl" id="day-3" role="tabpanel" aria-labelledby="tab-3" hidden>
+<li><span class="tm">9:00 AM – 9:30 AM</span><span class="nm">Registration</span><span class="du">30 minutes</span></li>
+<li><span class="tm">9:30 AM – 11:30 AM</span><span class="nm">Committee Session 5</span><span class="du">2 hours</span></li>
+<li><span class="tm">11:30 AM – 12:00 PM</span><span class="nm">Break</span><span class="du">30 minutes</span></li>
+<li><span class="tm">12:00 PM – 2:30 PM</span><span class="nm">Committee Session 6</span><span class="du">2 hours 30 minutes</span></li>
+<li><span class="tm">2:30 PM – 3:30 PM</span><span class="nm">Lunch</span><span class="du">1 hour</span></li>
+<li><span class="tm">3:30 PM – 5:30 PM</span><span class="nm">Closing Ceremony</span><span class="du">2 hours</span></li>
+<li><span class="tm">5:30 PM</span><span class="nm">Dispersal</span><span class="du">30 minutes</span></li>
+</ol>
+</div>
+</section>
 
-      <div class="ec-panel" id="panel-compose" role="tabpanel" aria-labelledby="tab-compose" tabindex="0" data-panel="compose" hidden>
-        <form id="compose-form" class="compose">
-          <input id="reply-to-id" type="hidden">
-          <label>Type
-            <select id="kind"></select>
-          </label>
-          <label id="to-wrap">To
-            <select id="to"></select>
-          </label>
-          <label>Subject
-            <input id="subject" maxlength="120" required>
-          </label>
-          <label>Message
-            <textarea id="body" rows="6" maxlength="2000" required></textarea>
-          </label>
-          <p class="muted" id="kind-hint"></p>
-          <button class="btn gold" type="submit">Send</button>
-          <p class="ok" id="send-msg" role="status" aria-live="polite"></p>
-        </form>
-      </div>
-    </div>
-  </section>
+<!-- E-Chits portal -->
+<section class="sec echits-sec" id="echits">
+<div class="wrap">
+<div class="head"><p class="eyebrow disp">DXB MUN · Delegate portal</p><h2 class="disp">E-Chits</h2></div>
+<div class="echits-card login" id="ec-login">
+<div>
+<h3 class="disp">Enter your access code</h3>
+<p>Your code looks like <b>DEL12345</b>, <b>CHR12345</b> or <b>ADN12345</b>.</p>
+</div>
+<form id="login-form" autocomplete="on">
+<label class="sr-only" for="code-input">Access code</label>
+<input id="code-input" name="access-code" type="text" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="8" pattern="(DEL|CHR|ADN)[0-9]{5}" placeholder="e.g. DEL12345" aria-describedby="code-hint login-err" required>
+<button class="btn" type="submit">Log in</button>
+<p class="sr-only" id="code-hint">Enter your eight-character delegate, chair, or admin access code.</p>
+<p class="echits-error" id="login-err" role="alert" aria-live="assertive"></p>
+</form>
+</div>
 
-  <!-- WELLNESS -->
-  <section id="wellness" class="section">
-    <span class="num">05</span>
-    <h2>Delegate<br>Wellness</h2>
-    <div class="card well">
-      <div>
-        <h3 class="gold-text">Quick reset</h3>
-        <p class="muted">Take a moment between sessions.</p>
-        <p><b id="well-count">0 of 3 checked today.</b></p>
-      </div>
-      <div class="checks">
-        <label class="check"><input type="checkbox" data-w="water"> Water</label>
-        <label class="check"><input type="checkbox" data-w="stretch"> Stretch</label>
-        <label class="check"><input type="checkbox" data-w="breathe"> Breathe</label>
-      </div>
-      <p class="muted small-note">Saved on this device for today.</p>
-    </div>
-  </section>
+<div class="echits-card" id="ec-app" hidden>
+<div class="who">
+<div><h3 class="disp" id="who-name"></h3><p><span id="who-role"></span> · <span id="who-code"></span></p></div>
+<button class="btn ghost sm" id="logout" type="button">Log out</button>
+</div>
+<p class="ec-status" id="ec-status" role="status" aria-live="polite"></p>
+<div class="tabs ec-tabs" id="ec-tabs" role="tablist" aria-label="E-Chits">
+<button type="button" role="tab" id="tab-inbox" aria-selected="true" aria-controls="panel-inbox" data-tab="inbox" class="on">Inbox <i id="cnt-inbox">0</i></button>
+<button type="button" role="tab" id="tab-compose" aria-selected="false" aria-controls="panel-compose" data-tab="compose">Compose</button>
+<button type="button" role="tab" id="tab-sent" aria-selected="false" aria-controls="panel-sent" data-tab="sent">Sent</button>
+<button type="button" role="tab" id="tab-queue" aria-selected="false" aria-controls="panel-queue" data-tab="queue" hidden>Approvals <i id="cnt-queue">0</i></button>
+</div>
+<div class="ec-panel" id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox" tabindex="0" data-panel="inbox"></div>
+<div class="ec-panel" id="panel-sent" role="tabpanel" aria-labelledby="tab-sent" tabindex="0" data-panel="sent" hidden></div>
+<div class="ec-panel" id="panel-queue" role="tabpanel" aria-labelledby="tab-queue" tabindex="0" data-panel="queue" hidden></div>
+<div class="ec-panel" id="panel-compose" role="tabpanel" aria-labelledby="tab-compose" tabindex="0" data-panel="compose" hidden>
+<form id="compose-form" class="compose">
+<input id="reply-to-id" type="hidden">
+<label>Type<select id="kind"></select></label>
+<label id="to-wrap">To<select id="to"></select></label>
+<label>Subject<input id="subject" maxlength="120" required></label>
+<label>Message<textarea id="body" rows="6" maxlength="2000" required></textarea></label>
+<p id="kind-hint"></p>
+<button class="btn" type="submit">Send</button>
+<p id="send-msg" role="status" aria-live="polite"></p>
+</form>
+</div>
+</div>
+</div>
+</section>
+
+<!-- Delegate wellness: a small daily self-care check-in, saved only in this browser. -->
+<section class="sec wellness-sec" id="wellness">
+<div class="wrap">
+<div class="head"><p class="eyebrow disp">04</p><h2 class="disp">Delegate wellness</h2></div>
+<div class="wellness-card">
+<div class="wellness-intro">
+<h3 class="disp">Quick reset</h3>
+<p>Take a moment between sessions.</p>
+<p class="wellness-status" id="wellness-status" role="status" aria-live="polite">0 of 3 checked today.</p>
+</div>
+<fieldset class="wellness-list" aria-label="Daily wellness check-in">
+<label class="wellness-item"><input type="checkbox" data-wellness="water"><span>Water</span></label>
+<label class="wellness-item"><input type="checkbox" data-wellness="stretch"><span>Stretch</span></label>
+<label class="wellness-item"><input type="checkbox" data-wellness="breathe"><span>Breathe</span></label>
+</fieldset>
+<p class="wellness-note" id="wellness-note">Saved on this device for today.</p>
+</div>
+</div>
+</section>
+
+<!-- Resources -->
+<section class="sec res" id="resources">
+<div class="wrap">
+<div class="head"><p class="eyebrow disp">05</p><h2 class="disp">Resources</h2></div>
+<div class="rowwrap">
+<a class="row" href="#"><div><b class="disp">[Rules of procedure]</b><span>[How to write a position paper and speak in session.]</span></div><span class="arrow disp" aria-hidden="true">→</span></a>
+</div>
+</div>
+</section>
+
 </main>
 
-<footer id="contact" inert>
-  <p class="display">DXBMUN 27'</p>
-  <p class="muted">For questions, contact the DXBMUN organizing team through your school or official conference channels.</p>
+<!-- Footer -->
+<footer id="contact">
+<div class="wrap">
+<p class="word disp" aria-hidden="true">DXB MUN</p>
+<div class="foot-row">
+<span>© [Year] DXB MUN · [email] · [Instagram]</span>
+<a href="#home">Back to top</a>
+</div>
+</div>
 </footer>
 
-<script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

@@ -1,0 +1,77 @@
+.timer-page{min-height:100vh;min-height:100svh;overflow-x:clip;background:var(--bg)}
+.timer-nav{position:fixed;z-index:50;top:calc(14px + env(safe-area-inset-top,0px));left:50%;display:flex;align-items:center;justify-content:space-between;gap:16px;width:min(1120px,calc(100% - 24px));margin:0;padding:8px 12px 8px 24px;transform:translateX(-50%);border:1px solid rgba(255,255,255,.14);border-radius:999px;background:rgba(20,8,11,.88);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.timer-nav .logo{font-size:24px}
+.timer-nav .btn{min-height:42px;padding:0 20px;font-size:11px;letter-spacing:.1em}
+.timer-main{min-height:100vh;min-height:100svh;padding-top:74px}
+.timer-sec{display:flex;align-items:center;min-height:calc(100vh - 74px);min-height:calc(100svh - 74px);padding:36px 0 52px;background:radial-gradient(70% 65% at 0% 40%,rgba(122,20,37,.62),transparent 74%),radial-gradient(55% 60% at 100% 85%,rgba(255,90,54,.1),transparent 70%),var(--bg)}
+.timer-sec>.wrap{width:100%;max-width:1120px}
+.timer-page-head{margin:0 0 20px}
+.timer-page-head .eyebrow{margin:0 0 6px;font-size:14px;letter-spacing:.24em}
+.timer-page-head h1{font-size:clamp(54px,8vw,104px);line-height:.88;letter-spacing:.01em}
+.timer-shell{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(28px,5vw,64px);padding:clamp(24px,4vw,44px);border:1px solid rgba(242,183,5,.65);border-radius:28px;background:linear-gradient(120deg,rgba(122,20,37,.25),transparent 45%),rgba(15,8,10,.88);box-shadow:10px 10px 0 var(--accent),0 24px 70px rgba(0,0,0,.32)}
+.timer-shell.timer-single{display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;max-width:760px;min-height:360px;margin:0 auto;padding:clamp(28px,6vw,64px)}
+.timer-clock{min-width:0}
+.timer-kicker{font-size:clamp(24px,3vw,34px);line-height:1.05}
+.timer-clock{padding:24px 16px;border:1px solid rgba(255,255,255,.1);border-radius:22px;background:rgba(0,0,0,.2)}
+.timer-single .timer-clock{display:grid;justify-items:center;width:100%;padding:0;border:0;background:transparent}
+.timer-single .timer-kicker{margin:0 0 16px;color:var(--accent);font-size:clamp(20px,3vw,30px);letter-spacing:.08em}
+.timer-wheel-instruction{margin:0 0 20px;color:var(--muted);font-size:13px;text-align:center}
+.timer-presets{justify-content:center;gap:8px;margin:0 0 20px}
+.timer-preset{min-height:36px;padding:0 14px;border:1px solid rgba(255,255,255,.25);border-radius:999px;background:transparent;color:var(--cream);font:700 11px 'DM Sans',sans-serif;letter-spacing:.04em;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
+.timer-preset:hover,.timer-preset.is-active{border-color:var(--accent);background:var(--accent);color:var(--ink)}
+.timer-preset:disabled{cursor:default}
+.timer-preset:focus-visible{outline:3px solid var(--pop);outline-offset:3px}
+.timer-wheel-picker{display:grid;grid-template-columns:minmax(0,1fr) 32px minmax(0,1fr);align-items:center;gap:12px;width:min(100%,460px)}
+.timer-wheel-unit{display:grid;justify-items:center;gap:10px;min-width:0}
+.timer-wheel-label{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}
+.timer-wheel{position:relative;width:min(100%,150px);height:250px;perspective:700px;overflow:hidden;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;-webkit-mask-image:linear-gradient(transparent,#000 26%,#000 74%,transparent);mask-image:linear-gradient(transparent,#000 26%,#000 74%,transparent);outline:none}
+.timer-wheel.drag{cursor:grabbing}
+.timer-wheel-in{position:absolute;inset:0;transform-style:preserve-3d}
+.timer-wheel-option{position:absolute;top:50%;left:0;right:0;display:flex;height:48px;margin-top:-24px;align-items:center;justify-content:center;color:rgba(255,255,255,.6);backface-visibility:hidden;font:400 30px/1 'Anton',Impact,sans-serif;letter-spacing:.06em;will-change:transform,opacity}
+.timer-wheel-option.is-selected{color:var(--accent)}
+.timer-wheel::after{position:absolute;inset:50% 8px auto;height:58px;margin-top:-29px;content:"";border:2px solid var(--accent);border-radius:999px;pointer-events:none;box-shadow:0 0 26px rgba(242,183,5,.35),inset 0 0 18px rgba(242,183,5,.12)}
+.timer-wheel:focus-visible{outline:3px solid var(--pop);outline-offset:4px}
+.timer-wheel[aria-disabled="true"]{pointer-events:none}
+.timer-wheel-colon{margin-top:24px;color:var(--accent);font-size:50px;line-height:1;text-shadow:0 0 20px rgba(242,183,5,.28)}
+.timer-remaining{margin:18px 0 0;color:var(--cream);font-size:13px;font-weight:700;letter-spacing:.04em;text-align:center}
+.timer-single .timer-state{min-height:26px;margin:20px 0 22px}
+.timer-single .timer-actions{width:min(100%,360px)}
+.timer-state{margin:14px 0 18px;font-size:13px}
+.timer-actions .btn{min-width:116px;min-height:46px;padding:0 20px;font-size:11px}
+@media(max-width:900px){
+.timer-main{padding-top:72px}
+.timer-sec{min-height:calc(100svh - 72px);padding:30px 0 42px}
+.timer-shell{grid-template-columns:1fr;gap:20px}
+.timer-clock{order:-1;padding:20px}
+.timer-shell.timer-single{min-height:320px}
+.timer-single .timer-clock{order:initial;padding:0}
+}
+
+@media(max-width:560px){
+.timer-nav{padding:7px 8px 7px 16px}
+.timer-nav .logo{font-size:20px}
+.timer-nav .btn{min-height:38px;padding:0 13px;font-size:9px;letter-spacing:.07em}
+.timer-main{padding-top:66px}
+.timer-sec{min-height:calc(100svh - 66px);align-items:flex-start;padding:28px 0 48px}
+.timer-sec>.wrap{padding-inline:16px}
+.timer-page-head{margin-bottom:16px}
+.timer-page-head .eyebrow{font-size:11px;letter-spacing:.18em}
+.timer-page-head h1{font-size:clamp(48px,15vw,72px);line-height:.9}
+.timer-shell{gap:20px;padding:18px;border-radius:22px;box-shadow:6px 6px 0 var(--accent)}
+.timer-clock{padding:20px 12px;border-radius:18px}
+.timer-shell.timer-single{min-height:0;padding:32px 18px}
+.timer-single .timer-kicker{margin-bottom:12px;font-size:20px}
+.timer-wheel-instruction{margin-bottom:16px;font-size:12px}
+.timer-presets{gap:6px;margin-bottom:16px}
+.timer-preset{min-height:34px;padding:0 11px;font-size:10px}
+.timer-remaining{margin-top:14px;font-size:12px}
+.timer-single .timer-state{margin:14px 0 20px}
+.timer-single .timer-actions{width:100%;max-width:320px}
+.timer-state{min-height:22px;margin:12px 0 16px;font-size:12px}
+.timer-actions{gap:8px}
+.timer-actions .btn{min-height:44px;flex:1;padding:0 12px}
+}
+
+@media(prefers-reduced-motion:reduce){
+.timer-wheel-option{will-change:auto}
+}

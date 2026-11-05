@@ -27,7 +27,7 @@
 <div class="timer-shell timer-single">
 <div class="timer-clock">
 <p class="timer-kicker disp">Committee speaking session</p>
-<p class="timer-wheel-instruction">The chair chooses a speaking format, then sets one common time for every delegate.</p>
+<p class="timer-wheel-instruction">Choose GSL, moderated caucus, or unmoderated caucus and set the required speaking time.</p>
 <div class="timer-session-control" id="timer-session-control">
 <p class="timer-session-label">General-purpose timer</p>
 <button class="btn ghost sm" id="general-timer-setup" type="button">Set up timer</button>
@@ -42,15 +42,15 @@
 <div class="timer-session-actions" role="group" aria-label="Choose speaking format">
 <button class="btn" type="button" data-session-mode="gsl">Start GSL</button>
 <button class="btn" type="button" data-session-mode="moderated_caucus">Start moderated caucus</button>
-<button class="btn" type="button" data-session-mode="round_table">Start round table conference</button>
+<button class="btn" type="button" data-session-mode="unmoderated_caucus">Start unmoderated caucus</button>
 </div>
 <p class="timer-chair-hint" id="timer-chair-hint"><span id="timer-chair-hint-text">Chair sign-in is required to start a speaking format.</span> <a href="#speaker-auth">Go to chair sign-in</a>.</p>
 <p class="timer-session-status" id="timer-session-status" role="status" aria-live="polite">No speaking format is active.</p>
 <button class="btn ghost sm" id="timer-session-end" type="button" hidden>End speaking format</button>
 </div>
 <div class="timer-duration-picker" id="timer-duration-picker" hidden>
-<p class="timer-session-label" id="timer-duration-label">2 · Set the common speaking time</p>
-<div class="timer-presets" role="group" aria-label="Common speaking time presets">
+<p class="timer-session-label" id="timer-duration-label">2 · Choose a speaking format first</p>
+<div class="timer-presets" role="group" aria-label="Timer duration presets">
 <button class="timer-preset" type="button" data-duration="30" aria-pressed="false">0:30</button>
 <button class="timer-preset is-active" type="button" data-duration="60" aria-pressed="true">1:00</button>
 <button class="timer-preset" type="button" data-duration="90" aria-pressed="false">1:30</button>
@@ -68,8 +68,12 @@
 <div class="timer-wheel" id="timer-seconds" role="listbox" aria-labelledby="seconds-label" aria-label="Seconds" aria-disabled="false" aria-activedescendant="timer-seconds-option-0" tabindex="0"><div class="timer-wheel-in"></div></div>
 </div>
 </div>
+<div class="caucus-total-picker" id="caucus-total-picker" hidden>
+<label for="caucus-total-minutes">Total moderated caucus time (minutes)</label>
+<input id="caucus-total-minutes" type="number" min="1" max="60" step="1" value="10">
+</div>
 <div class="timer-session-confirm">
-<button class="btn" id="timer-session-confirm" type="button">Start format with this time</button>
+<button class="btn" id="timer-session-confirm" type="button">Start selected format</button>
 <button class="btn ghost sm" id="timer-session-cancel" type="button">Cancel</button>
 </div>
 </div>
@@ -78,12 +82,18 @@
 <strong id="general-timer-clock">--:--</strong>
 <span id="general-timer-state">No timer running</span>
 </section>
+<section class="caucus-timer-display" id="caucus-timer-display" aria-label="Caucus time remaining" hidden>
+<span class="general-timer-caption disp">Caucus time remaining</span>
+<strong id="caucus-timer-clock">--:--</strong>
+<span id="caucus-timer-state">No caucus timer</span>
+</section>
 <p class="speaker-announcement" id="speaker-announcement" aria-live="off" hidden></p>
 <p class="timer-remaining" id="timer-remaining" aria-live="off">No active speaker timer.</p>
 <p class="timer-state" id="timer-state" role="status" aria-live="polite">Loading speaking list…</p>
 </div>
 </div>
 <section class="speaker-panel" aria-label="Speaking order">
+<h2 class="speaker-panel-title disp" id="speaker-panel-title">General Speakers List</h2>
 <div class="speaker-toolbar">
 <label for="speaker-committee">Committee</label>
 <select id="speaker-committee"></select>

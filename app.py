@@ -292,9 +292,12 @@ def _init_db():
                 """
                 CREATE TABLE IF NOT EXISTS committee_session(
                     committee TEXT PRIMARY KEY, mode TEXT NOT NULL, duration INTEGER NOT NULL,
-                    started_at BIGINT NOT NULL
+                    started_at BIGINT NOT NULL, total_duration INTEGER
                 )
                 """,
+            )
+            db_execute(
+                con, "ALTER TABLE committee_session ADD COLUMN IF NOT EXISTS total_duration INTEGER"
             )
             db_execute(
                 con,
@@ -350,7 +353,7 @@ def _init_db():
                 started_at INTEGER NOT NULL, duration INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS committee_session(
                 committee TEXT PRIMARY KEY, mode TEXT NOT NULL, duration INTEGER NOT NULL,
-                started_at INTEGER NOT NULL);
+                started_at INTEGER NOT NULL, total_duration INTEGER);
             CREATE TABLE IF NOT EXISTS committee_general_timer(
                 committee TEXT PRIMARY KEY, duration INTEGER NOT NULL, started_at INTEGER NOT NULL,
                 remaining INTEGER NOT NULL, running INTEGER NOT NULL);
@@ -386,6 +389,11 @@ def _init_db():
                 con.execute(
                     "ALTER TABLE committee_speakers ADD COLUMN duration INTEGER NOT NULL DEFAULT 60"
                 )
+            session_columns = {
+                column["name"] for column in con.execute("PRAGMA table_info(committee_session)").fetchall()
+            }
+            if "total_duration" not in session_columns:
+                con.execute("ALTER TABLE committee_session ADD COLUMN total_duration INTEGER")
         db_execute(con, "DROP TABLE IF EXISTS committee_vote_ballots")
         db_execute(con, "DROP TABLE IF EXISTS committee_votes")
         poi_history_migration = "delete_poi_chit_history_20261105"
@@ -466,6 +474,69 @@ def user_dict(u):
 
 def rows(sql, args=()):
     return [dict(r) for r in db_execute(get_db(), sql, args).fetchall()]
+
+
+def expire_speaker_timer(db, committee, now):
+    timer = db_execute(
+        db, "SELECT user_code, started_at, duration FROM committee_timer WHERE committee=?",
+        (committee,),
+    ).fetchone()
+    if not timer or timer["started_at"] + timer["duration"] > now:
+        return False
+
+    expired = db_execute(
+        db,
+        "DELETE FROM committee_timer WHERE committee=? AND user_code=? "
+        "AND started_at=? AND duration=?",
+        (committee, timer["user_code"], timer["started_at"], timer["duration"]),
+    )
+    if expired.rowcount != 1:
+        return False
+    db_execute(
+        db, "DELETE FROM committee_speakers WHERE committee=? AND user_code=?",
+        (committee, timer["user_code"]),
+    )
+    ordered = db_execute(
+        db, "SELECT id FROM committee_speakers WHERE committee=? ORDER BY position,id",
+        (committee,),
+    ).fetchall()
+    for position, row in enumerate(ordered, 1):
+        db_execute(
+            db, "UPDATE committee_speakers SET position=? WHERE id=? AND committee=?",
+            (position, row["id"], committee),
+        )
+    db.commit()
+    return True
+
+
+def expire_caucus_session(db, committee, now):
+    active_session = db_execute(
+        db,
+        "SELECT mode, started_at, total_duration FROM committee_session WHERE committee=?",
+        (committee,),
+    ).fetchone()
+    if (
+        not active_session
+        or active_session["mode"] not in ("moderated_caucus", "unmoderated_caucus")
+        or not active_session["total_duration"]
+        or active_session["started_at"] + active_session["total_duration"] > now
+    ):
+        return False
+
+    expired = db_execute(
+        db,
+        "DELETE FROM committee_session WHERE committee=? AND mode=? AND started_at=? "
+        "AND total_duration=?",
+        (
+            committee, active_session["mode"], active_session["started_at"],
+            active_session["total_duration"],
+        ),
+    )
+    if expired.rowcount != 1:
+        return False
+    db_execute(db, "DELETE FROM committee_timer WHERE committee=?", (committee,))
+    db.commit()
+    return True
 
 
 def client_ip():
@@ -640,6 +711,9 @@ def speakers():
     if committee not in committees:
         return jsonify(error="Unknown committee"), 400
 
+    now = time.time()
+    expire_speaker_timer(db, committee, now)
+    session_finished = expire_caucus_session(db, committee, now)
     queue = rows(
         "SELECT s.id, s.position, s.duration, u.name, u.country FROM committee_speakers s "
         "JOIN users u ON u.code=s.user_code "
@@ -669,10 +743,15 @@ def speakers():
             "duration": timer["duration"], "remaining": remaining,
         }
     active_session = db_execute(
-        db, "SELECT mode, duration, started_at FROM committee_session WHERE committee=?",
+        db, "SELECT mode, duration, started_at, total_duration "
+            "FROM committee_session WHERE committee=?",
         (committee,),
     ).fetchone()
     session_data = dict(active_session) if active_session else None
+    if session_data and session_data["total_duration"]:
+        session_data["total_remaining"] = max(
+            0, session_data["total_duration"] - (now - session_data["started_at"])
+        )
     general_timer = db_execute(
         db, "SELECT duration, started_at, remaining, running "
             "FROM committee_general_timer WHERE committee=?",
@@ -693,7 +772,8 @@ def speakers():
         }
     return jsonify(
         committee=committee, committees=committees, queue=queue, eligible=eligible,
-        timer=timer_data, session=session_data, server_now=time.time(),
+        timer=timer_data, session=session_data, session_finished=session_finished,
+        server_now=now,
         general_timer=general_timer_data,
         user=user_dict(user) if user else None,
     )
@@ -722,10 +802,13 @@ def edit_speakers():
         return jsonify(error="Chairs may only edit their own committee's list"), 403
 
     active_session = db_execute(
-        db, "SELECT duration FROM committee_session WHERE committee=?", (committee,)
+        db, "SELECT mode, duration FROM committee_session WHERE committee=?", (committee,)
     ).fetchone()
-    if action in ("add", "add_all") and not active_session:
-        return jsonify(error="Start a speaking format before adding delegates to the list."), 409
+    if action in ("add", "add_all"):
+        if not active_session:
+            return jsonify(error="Start a speaking format before adding delegates to the list."), 409
+        if active_session["mode"] == "unmoderated_caucus":
+            return jsonify(error="The speaking list is not used during an unmoderated caucus."), 409
 
     if action == "add_all":
         delegates = db_execute(
@@ -828,6 +911,8 @@ def start_speaker_timer():
     except (TypeError, ValueError):
         return jsonify(error="Choose a speaker"), 400
     db = get_db()
+    now = time.time()
+    expire_speaker_timer(db, user["committee"], now)
     speaker = db_execute(
         db, "SELECT s.user_code, s.duration FROM committee_speakers s "
             "JOIN users u ON u.code=s.user_code "
@@ -836,18 +921,22 @@ def start_speaker_timer():
     ).fetchone()
     if not speaker:
         return jsonify(error="That speaker is not on your committee's list"), 403
+    expire_caucus_session(db, user["committee"], now)
     active_session = db_execute(
-        db, "SELECT duration FROM committee_session WHERE committee=?", (user["committee"],)
+        db, "SELECT mode, duration FROM committee_session WHERE committee=?",
+        (user["committee"],),
     ).fetchone()
     if not active_session:
         return jsonify(error="Start a speaking format before starting a speaker timer"), 409
+    if active_session["mode"] not in ("gsl", "moderated_caucus"):
+        return jsonify(error="Speaker timers are not used in this speaking format"), 409
     duration = active_session["duration"]
     db_execute(
         db,
         "INSERT INTO committee_timer(committee,user_code,started_at,duration) "
         "VALUES(?,?,?,?) ON CONFLICT(committee) DO UPDATE SET "
         "user_code=excluded.user_code, started_at=excluded.started_at, duration=excluded.duration",
-        (user["committee"], speaker["user_code"], int(time.time()), duration),
+        (user["committee"], speaker["user_code"], int(now), duration),
     )
     db.commit()
     return jsonify(ok=True)
@@ -868,25 +957,39 @@ def update_speaker_session():
         db_execute(db, "DELETE FROM committee_timer WHERE committee=?", (user["committee"],))
         db.commit()
         return jsonify(ok=True)
-    if mode not in ("gsl", "moderated_caucus", "round_table"):
-        return jsonify(error="Choose GSL, moderated caucus, or round table"), 400
-    try:
-        duration = int(data.get("duration"))
-    except (TypeError, ValueError):
-        return jsonify(error="Choose a valid common speaking time"), 400
-    if not 1 <= duration <= 3600:
-        return jsonify(error="Common speaking time must be between 1 second and 60 minutes"), 400
+    if mode not in ("gsl", "moderated_caucus", "unmoderated_caucus"):
+        return jsonify(error="Choose GSL, moderated caucus, or unmoderated caucus"), 400
+    duration = 0
+    if mode in ("gsl", "moderated_caucus"):
+        try:
+            duration = int(data.get("duration"))
+        except (TypeError, ValueError):
+            return jsonify(error="Choose a valid speaking time per delegate"), 400
+        if not 1 <= duration <= 3600:
+            return jsonify(error="Speaking time must be between 1 second and 60 minutes"), 400
+    total_duration = None
+    if mode in ("moderated_caucus", "unmoderated_caucus"):
+        try:
+            total_duration = int(data.get("total_duration"))
+        except (TypeError, ValueError):
+            return jsonify(error="Choose a valid total caucus time"), 400
+        if not 1 <= total_duration <= 3600:
+            return jsonify(error="Total caucus time must be between 1 second and 60 minutes"), 400
+    now = int(time.time())
     db_execute(
         db,
-        "INSERT INTO committee_session(committee,mode,duration,started_at) VALUES(?,?,?,?) "
+        "INSERT INTO committee_session(committee,mode,duration,started_at,total_duration) "
+        "VALUES(?,?,?,?,?) "
         "ON CONFLICT(committee) DO UPDATE SET mode=excluded.mode, "
-        "duration=excluded.duration, started_at=excluded.started_at",
-        (user["committee"], mode, duration, int(time.time())),
+        "duration=excluded.duration, started_at=excluded.started_at, "
+        "total_duration=excluded.total_duration",
+        (user["committee"], mode, duration, now, total_duration),
     )
-    db_execute(
-        db, "UPDATE committee_speakers SET duration=? WHERE committee=?",
-        (duration, user["committee"]),
-    )
+    if mode in ("gsl", "moderated_caucus"):
+        db_execute(
+            db, "UPDATE committee_speakers SET duration=? WHERE committee=?",
+            (duration, user["committee"]),
+        )
     db_execute(db, "DELETE FROM committee_timer WHERE committee=?", (user["committee"],))
     db.commit()
     return jsonify(ok=True)

@@ -210,8 +210,17 @@
   var sessionEnd = $('timer-session-end');
   var durationPicker = $('timer-duration-picker');
   var durationLabel = $('timer-duration-label');
+  var caucusTotalPicker = $('caucus-total-picker');
+  var caucusTotalMinutes = $('caucus-total-minutes');
   var sessionConfirm = $('timer-session-confirm');
   var sessionCancel = $('timer-session-cancel');
+  var speakerPanelTitle = $('speaker-panel-title');
+  var caucusTimerDisplay = $('caucus-timer-display');
+  var caucusTimerClock = $('caucus-timer-clock');
+  var caucusTimerState = $('caucus-timer-state');
+  var caucusTimerKey = '';
+  var caucusTimerDeadline = 0;
+  var caucusTimerInterval = null;
   var selectedCommittee = '';
   var currentUser = null;
   var timerKey = '';
@@ -320,6 +329,38 @@
       return false;
     });
   }
+  function tickCaucusTimer() {
+    var remaining = Math.max(0, (caucusTimerDeadline - Date.now()) / 1000);
+    caucusTimerClock.textContent = format(remaining);
+    if (!remaining) {
+      clearInterval(caucusTimerInterval);
+      caucusTimerInterval = null;
+      caucusTimerState.textContent = 'Caucus time is up';
+    }
+  }
+  function syncCaucusTimer(session, serverNow, sessionFinished) {
+    if (!session || !session.total_duration) {
+      caucusTimerKey = '';
+      caucusTimerDisplay.hidden = true;
+      clearInterval(caucusTimerInterval);
+      caucusTimerInterval = null;
+      caucusTimerClock.textContent = '--:--';
+      caucusTimerState.textContent = sessionFinished ? 'Caucus time is up' : 'No caucus timer';
+      return;
+    }
+    var key = session.started_at + ':' + session.total_duration;
+    if (key !== caucusTimerKey) {
+      caucusTimerKey = key;
+      caucusTimerDeadline = Date.now() + Math.max(0, session.total_remaining) * 1000;
+      clearInterval(caucusTimerInterval);
+      caucusTimerInterval = setInterval(tickCaucusTimer, 200);
+    }
+    caucusTimerDisplay.hidden = false;
+    caucusTimerClock.textContent = format(Math.max(0, (caucusTimerDeadline - Date.now()) / 1000));
+    caucusTimerState.textContent = session.mode === 'moderated_caucus'
+      ? 'Moderated caucus total time'
+      : 'Unmoderated caucus total time';
+  }
   function syncTimer(timer, serverNow, session) {
     if (!timer) {
       speakerAnnouncement.hidden = true;
@@ -369,7 +410,7 @@
     return {
       gsl: 'General Speakers List (GSL)',
       moderated_caucus: 'Moderated Caucus',
-      round_table: 'Round Table Conference'
+      unmoderated_caucus: 'Unmoderated Caucus'
     }[mode] || mode;
   }
   function makeButton(text, action, callback, disabled) {
@@ -424,19 +465,41 @@
     loginForm.hidden = !!currentUser;
     sessionBox.hidden = !currentUser;
     var session = data.session;
-    var canAdd = !!canEdit && !!session;
+    var canAdd = !!canEdit && !!session &&
+      (session.mode === 'gsl' || session.mode === 'moderated_caucus');
     addHint.hidden = canAdd;
+    addHint.textContent = !session
+      ? 'Start GSL or a moderated caucus before adding delegates to the list.'
+      : 'The speaking list is not used during an unmoderated caucus.';
     addAllButton.disabled = !canAdd || !data.eligible.length;
     addSelect.disabled = !canAdd || !data.eligible.length;
     addForm.querySelector('button[type="submit"]').disabled = !canAdd || !data.eligible.length;
-    sessionStatus.textContent = session
-      ? formatName(session.mode) + ' is active · ' + format(session.duration) + ' per delegate.'
-      : 'No speaking format is active. Choose a format, then set the common speaking time.';
+    sessionStatus.textContent = data.session_finished
+      ? 'Caucus time is up.'
+      : !session
+        ? 'No speaking format is active. Choose a format and set its time.'
+        : session.mode === 'gsl'
+          ? 'General Speakers List is active · ' + format(session.duration) + ' per speech.'
+          : session.mode === 'moderated_caucus'
+            ? 'Moderated Caucus is active · ' + format(session.total_duration) +
+              ' total, ' + format(session.duration) + ' per speech.'
+            : 'Unmoderated Caucus is active · ' + format(session.total_duration) + ' total.';
+    speakerPanelTitle.textContent = session && session.mode === 'moderated_caucus'
+      ? 'Moderated Caucus Speaking List'
+      : 'General Speakers List';
+    speakerPanelTitle.hidden = !!(session && session.mode === 'unmoderated_caucus');
+    speakerList.hidden = !!(session && session.mode === 'unmoderated_caucus');
+    speakerEmpty.hidden = data.queue.length !== 0 ||
+      !!(session && session.mode === 'unmoderated_caucus');
+    editor.hidden = !canEdit || !!(session && session.mode === 'unmoderated_caucus');
     sessionEnd.hidden = !canStart || !session;
     if (!canStart || (!pendingSessionMode && !pendingGeneralTimer)) durationPicker.hidden = true;
     generalTimerSetup.hidden = !canStart || generalTimerRunning || generalTimerRemaining > 0;
     if (!canStart) pendingSessionMode = '';
-    if (!pendingSessionMode) durationLabel.textContent = '2 · Set the common speaking time';
+    if (!pendingSessionMode && !pendingGeneralTimer) {
+      durationLabel.textContent = '2 · Choose a speaking format first';
+    }
+    caucusTotalPicker.hidden = pendingSessionMode !== 'moderated_caucus';
     userLabel.textContent = currentUser
       ? currentUser.name + ' · ' + currentUser.role + (currentUser.committee ? ' · ' + currentUser.committee : '')
       : '';
@@ -447,7 +510,6 @@
     }
 
     speakerList.textContent = '';
-    speakerEmpty.hidden = data.queue.length !== 0;
     data.queue.forEach(function (speaker, index) {
       var row = document.createElement('li');
       row.className = 'speaker-row';
@@ -518,13 +580,16 @@
     });
     syncTimer(data.timer, data.server_now, session);
     syncGeneralTimer(data.general_timer, data.server_now);
+    syncCaucusTimer(session, data.server_now, data.session_finished);
   }
   function loadSpeakers(reportError) {
     if (loading) return Promise.resolve();
     loading = true;
     var path = '/api/speakers' + (selectedCommittee ? '?committee=' + encodeURIComponent(selectedCommittee) : '');
     return api(path).then(function (data) {
-      var signature = JSON.stringify([data.committee, data.queue, data.eligible, data.user, data.session]);
+      var signature = JSON.stringify([
+        data.committee, data.queue, data.eligible, data.user, data.session, data.session_finished
+      ]);
       if (signature !== listSignature) {
         listSignature = signature;
         renderSpeakers(data);
@@ -532,6 +597,7 @@
         syncTimer(data.timer, data.server_now, data.session);
       }
       syncGeneralTimer(data.general_timer, data.server_now);
+      syncCaucusTimer(data.session, data.server_now, data.session_finished);
     }).catch(function (error) {
       if (reportError !== false || !message.textContent) showMessage(error.message, true);
       state.textContent = error.message;
@@ -582,15 +648,27 @@
       pendingSessionMode = button.dataset.sessionMode;
       pendingGeneralTimer = false;
       durationPicker.hidden = false;
-      durationLabel.textContent = '2 · Set one common time for ' + formatName(pendingSessionMode);
-      sessionConfirm.textContent = 'Start format with this time';
-      showMessage('Choose one speaking time, then confirm to start the format.');
+      caucusTotalPicker.hidden = pendingSessionMode !== 'moderated_caucus';
+      if (pendingSessionMode === 'gsl') {
+        durationLabel.textContent = '2 · Set the common speaking time per delegate';
+        sessionConfirm.textContent = 'Start GSL';
+        showMessage('Choose the GSL time allowed for each speech.');
+      } else if (pendingSessionMode === 'moderated_caucus') {
+        durationLabel.textContent = '2 · Set speaking time per delegate';
+        sessionConfirm.textContent = 'Start moderated caucus';
+        showMessage('Set the per-speech time and the total moderated caucus time.');
+      } else {
+        durationLabel.textContent = '2 · Set total unmoderated caucus time';
+        sessionConfirm.textContent = 'Start unmoderated caucus';
+        showMessage('Choose the total unmoderated caucus time.');
+      }
     });
   });
   generalTimerSetup.addEventListener('click', function () {
     pendingGeneralTimer = true;
     pendingSessionMode = '';
     durationPicker.hidden = false;
+    caucusTotalPicker.hidden = true;
     durationLabel.textContent = 'Set the timer duration';
     sessionConfirm.textContent = 'Start timer';
     sessionCancel.textContent = 'Cancel';
@@ -607,7 +685,7 @@
           if (!started) return;
           pendingGeneralTimer = false;
           durationPicker.hidden = true;
-          sessionConfirm.textContent = 'Start format with this time';
+          sessionConfirm.textContent = 'Start selected format';
           showMessage('Timer started for ' + format(generalDuration) + '.');
         });
       }
@@ -617,17 +695,32 @@
       }
       var duration = selectedDuration();
       if (!duration) {
-        showMessage('Choose a common speaking time greater than 00:00.', true);
+        showMessage('Choose a duration greater than 00:00.', true);
         return;
       }
       var mode = pendingSessionMode;
+      var payload = { mode: mode };
+      if (mode === 'gsl') {
+        payload.duration = duration;
+      } else if (mode === 'moderated_caucus') {
+        var totalMinutes = Number(caucusTotalMinutes.value);
+        if (!Number.isInteger(totalMinutes) || totalMinutes < 1 || totalMinutes > 60) {
+          showMessage('Total moderated caucus time must be between 1 and 60 minutes.', true);
+          return;
+        }
+        payload.duration = duration;
+        payload.total_duration = totalMinutes * 60;
+      } else {
+        payload.total_duration = duration;
+      }
       api('/api/speakers/session', {
         method: 'POST',
-        body: JSON.stringify({ mode: mode, duration: duration })
+        body: JSON.stringify(payload)
       }).then(function () {
         pendingSessionMode = '';
         durationPicker.hidden = true;
-        showMessage(formatName(mode) + ' started with ' + format(duration) + ' for every delegate.');
+        caucusTotalPicker.hidden = true;
+        showMessage(formatName(mode) + ' started.');
         return loadSpeakers(false);
       }).catch(function (error) {
         showMessage(error.message, true);
@@ -637,7 +730,8 @@
     pendingSessionMode = '';
     pendingGeneralTimer = false;
     durationPicker.hidden = true;
-    sessionConfirm.textContent = 'Start format with this time';
+    caucusTotalPicker.hidden = true;
+    sessionConfirm.textContent = 'Start selected format';
     showMessage('');
   });
   generalTimerPause.addEventListener('click', function () {

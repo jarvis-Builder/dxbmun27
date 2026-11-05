@@ -76,7 +76,7 @@
 .caucus-total-picker input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .timer-session-confirm{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px}
 .timer-session-confirm .btn{min-height:42px;padding-inline:16px;font-size:10px}
-.speaker-panel{width:min(760px,100%);margin:28px auto 0;padding:clamp(20px,4vw,36px);border:1px solid rgba(255,255,255,.14);border-radius:24px;background:rgba(15,8,10,.88)}
+.speaker-panel{width:100%;margin:0;padding:clamp(20px,4vw,36px);border:1px solid rgba(255,255,255,.14);border-radius:24px;background:rgba(15,8,10,.88)}
 .speaker-panel-title{margin:0 0 16px;color:var(--accent);font-size:24px}
 .speaker-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}
 .speaker-toolbar label,.speaker-auth label{color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
@@ -148,7 +148,7 @@
 .general-timer-controls #general-timer-reset{grid-column:1/-1}
 .timer-session-confirm{display:grid;grid-template-columns:1fr}
 .timer-session-confirm .btn{width:100%;min-height:44px}
-.speaker-panel{margin-top:20px;padding:18px}
+.speaker-panel{padding:18px}
 .speaker-auth{align-items:flex-start;flex-direction:column}
 .speaker-session{justify-content:flex-start}
 .speaker-row{align-items:flex-start;flex-wrap:wrap}

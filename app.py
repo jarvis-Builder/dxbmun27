@@ -11,7 +11,6 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 from fastapi.middleware.wsgi import WSGIMiddleware
-from starlette.middleware.sessions import SessionMiddleware
 from flask import Flask, g, jsonify, render_template, request, send_file, session
 from werkzeug.exceptions import RequestEntityTooLarge
 
@@ -39,7 +38,6 @@ flask_app.config.update(
 )
 
 app = FastAPI(title="E-Chits")
-app.add_middleware(SessionMiddleware, secret_key=secret_key or (secrets.token_hex(32) if IS_VERCEL else "dev-only-change-me"))
 app.mount("/", WSGIMiddleware(flask_app))
 
 DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE, "echits.db"))
@@ -118,7 +116,11 @@ def get_db_pool():
                     max_size=max_size,
                     timeout=10,
                     max_idle=30,
-                    maxOOL.open()
+                    max_lifetime=300,
+                    kwargs={"row_factory": dict_row},
+                    open=False,
+                )
+                DB_POOL.open()
     return DB_POOL
 
 

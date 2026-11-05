@@ -638,7 +638,7 @@ def speakers():
     ) if can_edit else []
     timer = db_execute(
         db,
-        "SELECT t.user_code, u.name, t.started_at, t.duration FROM committee_timer t "
+        "SELECT t.user_code, u.name, u.country, t.started_at, t.duration FROM committee_timer t "
         "JOIN users u ON u.code=t.user_code WHERE t.committee=?",
         (committee,),
     ).fetchone()
@@ -646,7 +646,8 @@ def speakers():
     if timer:
         remaining = max(0, timer["duration"] - (time.time() - timer["started_at"]))
         timer_data = {
-            "speaker": timer["name"], "started_at": timer["started_at"],
+            "speaker": timer["name"], "country": timer["country"],
+            "started_at": timer["started_at"],
             "duration": timer["duration"], "remaining": remaining,
         }
     active_session = db_execute(

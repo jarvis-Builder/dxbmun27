@@ -338,10 +338,10 @@
       : session && session.mode === 'moderated_caucus'
         ? 'a Moderated Caucus Speech'
         : '';
-    speakerAnnouncement.hidden = !speechLabel || !timer.remaining;
+    speakerAnnouncement.hidden = !speechLabel || !timer.remaining || !timer.country;
     speakerAnnouncement.textContent = speakerAnnouncement.hidden
       ? ''
-      : timer.speaker + ' is giving ' + speechLabel;
+      : timer.country + ' is giving ' + speechLabel;
     var key = timer.started_at + ':' + timer.speaker + ':' + timer.duration;
     if (key !== timerKey) {
       timerKey = key;

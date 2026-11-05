@@ -190,6 +190,7 @@
   });
 
   var committeeSelect = $('speaker-committee');
+  var speakerOrderContent = $('speaker-order-content');
   var speakerList = $('speaker-list');
   var speakerEmpty = $('speaker-empty');
   var editor = $('speaker-editor');
@@ -465,12 +466,12 @@
     loginForm.hidden = !!currentUser;
     sessionBox.hidden = !currentUser;
     var session = data.session;
+    var gslActive = !!session && session.mode === 'gsl';
+    speakerOrderContent.hidden = !gslActive;
     var canAdd = !!canEdit && !!session &&
-      (session.mode === 'gsl' || session.mode === 'moderated_caucus');
+      session.mode === 'gsl';
     addHint.hidden = canAdd;
-    addHint.textContent = !session
-      ? 'Start GSL or a moderated caucus before adding delegates to the list.'
-      : 'The speaking list is not used during an unmoderated caucus.';
+    addHint.textContent = 'Start a GSL before adding delegates to the speaking list.';
     addAllButton.disabled = !canAdd || !data.eligible.length;
     addSelect.disabled = !canAdd || !data.eligible.length;
     addForm.querySelector('button[type="submit"]').disabled = !canAdd || !data.eligible.length;
@@ -484,14 +485,9 @@
             ? 'Moderated Caucus is active · ' + format(session.total_duration) +
               ' total, ' + format(session.duration) + ' per speech.'
             : 'Unmoderated Caucus is active · ' + format(session.total_duration) + ' total.';
-    speakerPanelTitle.textContent = session && session.mode === 'moderated_caucus'
-      ? 'Moderated Caucus Speaking List'
-      : 'General Speakers List';
-    speakerPanelTitle.hidden = !!(session && session.mode === 'unmoderated_caucus');
-    speakerList.hidden = !!(session && session.mode === 'unmoderated_caucus');
-    speakerEmpty.hidden = data.queue.length !== 0 ||
-      !!(session && session.mode === 'unmoderated_caucus');
-    editor.hidden = !canEdit || !!(session && session.mode === 'unmoderated_caucus');
+    speakerPanelTitle.textContent = 'General Speakers List';
+    speakerEmpty.hidden = data.queue.length !== 0;
+    editor.hidden = !canEdit;
     sessionEnd.hidden = !canStart || !session;
     if (!canStart || (!pendingSessionMode && !pendingGeneralTimer)) durationPicker.hidden = true;
     generalTimerSetup.hidden = !canStart || generalTimerRunning || generalTimerRemaining > 0;

@@ -509,6 +509,11 @@ def expire_speaker_timer(db, committee, now):
     return True
 
 
+def clear_speaking_order(db, committee):
+    db_execute(db, "DELETE FROM committee_timer WHERE committee=?", (committee,))
+    db_execute(db, "DELETE FROM committee_speakers WHERE committee=?", (committee,))
+
+
 def expire_caucus_session(db, committee, now):
     active_session = db_execute(
         db,
@@ -534,7 +539,7 @@ def expire_caucus_session(db, committee, now):
     )
     if expired.rowcount != 1:
         return False
-    db_execute(db, "DELETE FROM committee_timer WHERE committee=?", (committee,))
+    clear_speaking_order(db, committee)
     db.commit()
     return True
 
@@ -954,7 +959,7 @@ def update_speaker_session():
     db = get_db()
     if mode == "end":
         db_execute(db, "DELETE FROM committee_session WHERE committee=?", (user["committee"],))
-        db_execute(db, "DELETE FROM committee_timer WHERE committee=?", (user["committee"],))
+        clear_speaking_order(db, user["committee"])
         db.commit()
         return jsonify(ok=True)
     if mode not in ("gsl", "moderated_caucus", "unmoderated_caucus"):
@@ -976,6 +981,7 @@ def update_speaker_session():
         if not 1 <= total_duration <= 3600:
             return jsonify(error="Total caucus time must be between 1 second and 60 minutes"), 400
     now = int(time.time())
+    clear_speaking_order(db, user["committee"])
     db_execute(
         db,
         "INSERT INTO committee_session(committee,mode,duration,started_at,total_duration) "
@@ -985,12 +991,6 @@ def update_speaker_session():
         "total_duration=excluded.total_duration",
         (user["committee"], mode, duration, now, total_duration),
     )
-    if mode in ("gsl", "moderated_caucus"):
-        db_execute(
-            db, "UPDATE committee_speakers SET duration=? WHERE committee=?",
-            (duration, user["committee"]),
-        )
-    db_execute(db, "DELETE FROM committee_timer WHERE committee=?", (user["committee"],))
     db.commit()
     return jsonify(ok=True)
 

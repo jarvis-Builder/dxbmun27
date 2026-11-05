@@ -195,6 +195,7 @@
   var editor = $('speaker-editor');
   var addForm = $('speaker-add-form');
   var addAllButton = $('speaker-add-all');
+  var addHint = $('speaker-add-hint');
   var addSelect = $('speaker-add-select');
   var loginForm = $('speaker-login-form');
   var accessCode = $('speaker-access-code');
@@ -423,6 +424,11 @@
     loginForm.hidden = !!currentUser;
     sessionBox.hidden = !currentUser;
     var session = data.session;
+    var canAdd = !!canEdit && !!session;
+    addHint.hidden = canAdd;
+    addAllButton.disabled = !canAdd || !data.eligible.length;
+    addSelect.disabled = !canAdd || !data.eligible.length;
+    addForm.querySelector('button[type="submit"]').disabled = !canAdd || !data.eligible.length;
     sessionStatus.textContent = session
       ? formatName(session.mode) + ' is active · ' + format(session.duration) + ' per delegate.'
       : 'No speaking format is active. Choose a format, then set the common speaking time.';
@@ -510,7 +516,6 @@
       option.textContent = delegate.name + (delegate.country ? ' · ' + delegate.country : '');
       addSelect.appendChild(option);
     });
-    addSelect.disabled = !data.eligible.length;
     syncTimer(data.timer, data.server_now, session);
     syncGeneralTimer(data.general_timer, data.server_now);
   }

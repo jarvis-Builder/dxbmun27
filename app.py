@@ -721,15 +721,18 @@ def edit_speakers():
     if committee != user["committee"]:
         return jsonify(error="Chairs may only edit their own committee's list"), 403
 
+    active_session = db_execute(
+        db, "SELECT duration FROM committee_session WHERE committee=?", (committee,)
+    ).fetchone()
+    if action in ("add", "add_all") and not active_session:
+        return jsonify(error="Start a speaking format before adding delegates to the list."), 409
+
     if action == "add_all":
         delegates = db_execute(
             db, "SELECT code FROM users WHERE role='delegate' AND committee=? ORDER BY name, code",
             (committee,),
         ).fetchall()
-        active_session = db_execute(
-            db, "SELECT duration FROM committee_session WHERE committee=?", (committee,)
-        ).fetchone()
-        duration = active_session["duration"] if active_session else 60
+        duration = active_session["duration"]
         position = db_execute(
             db, "SELECT COALESCE(MAX(position),0)+1 AS next_position "
                 "FROM committee_speakers WHERE committee=?", (committee,),
@@ -768,10 +771,7 @@ def edit_speakers():
             db, "SELECT COALESCE(MAX(position),0)+1 AS next_position "
                 "FROM committee_speakers WHERE committee=?", (committee,),
         ).fetchone()["next_position"]
-        session_duration = db_execute(
-            db, "SELECT duration FROM committee_session WHERE committee=?", (committee,)
-        ).fetchone()
-        duration = session_duration["duration"] if session_duration else 60
+        duration = active_session["duration"]
         added = db_execute(
             db, "INSERT INTO committee_speakers(committee,user_code,position,duration) "
                 "VALUES(?,?,?,?) "

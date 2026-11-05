@@ -66,13 +66,17 @@ $("#ec-tabs").addEventListener("keydown", (e) => {
   }
 });
 
-function personLabel(name, country, role) {
-  return `${country ? `<strong>${esc(country)}</strong> · ` : ""}${esc(name || "—")}${!country && role === "chair" ? " (Chair)" : !country && role === "admin" ? " (Admin)" : ""}`;
+function personLabel(name, country, role, includeName) {
+  const identity = country
+    ? `<strong>${esc(country)}</strong>`
+    : esc(ROLE_NAME[role] || "User");
+  return includeName ? `${identity} · ${esc(name || "—")}` : identity;
 }
 
 function msgCard(m, mode) {
   const when = new Date(m.created * 1000).toLocaleString();
-  const sender = personLabel(m.sname, m.scountry, m.srole);
+  const includeNames = mode === "queue" && me?.role === "chair";
+  const sender = personLabel(m.sname, m.scountry, m.srole, includeNames);
   const typeLabel = m.kind === "chit"
     ? m.subtype === "poi" ? "POI" : "CHIT"
     : m.kind.toUpperCase();
@@ -80,10 +84,10 @@ function msgCard(m, mode) {
     ? m.subtype === "poi" ? "POI" : "Other"
     : m.kind === "directive" && m.visibility ? m.visibility : "";
   const route = mode === "sent"
-    ? `To: ${personLabel(m.rname, m.rcountry, m.rrole)}`
+    ? `To: ${personLabel(m.rname, m.rcountry, m.rrole, false)}`
     : mode === "history"
-      ? `From: ${sender} → To: ${personLabel(m.rname, m.rcountry, m.rrole)}`
-    : `From: ${sender}` + (mode === "queue" ? ` → ${personLabel(m.rname, m.rcountry, m.rrole)}` : "");
+      ? `From: ${sender} → To: ${personLabel(m.rname, m.rcountry, m.rrole, false)}`
+    : `From: ${sender}` + (mode === "queue" ? ` → To: ${personLabel(m.rname, m.rcountry, m.rrole, includeNames)}` : "");
   const metadata = mode === "in" && m.kind === "chit"
     ? `<div class="meta msg-sender">From: ${sender}</div><div class="meta">${esc(when)}</div>`
     : `<div class="meta">${route} · ${esc(when)}</div>`;
@@ -153,11 +157,11 @@ async function refreshChitHistory() {
   if (select.options.length !== history.delegates.length + 1
       || history.delegates.some((delegate, index) => {
         const option = select.options[index + 1];
-        const label = `${delegate.country ? `${delegate.country} · ` : ""}${delegate.name}`;
+        const label = delegate.country || "Country not provided";
         return !option || option.value !== String(delegate.id) || option.textContent !== label;
       })) {
     select.innerHTML = `<option value="">Choose a delegate</option>` + history.delegates.map((delegate) =>
-      `<option value="${esc(delegate.id)}">${delegate.country ? `${esc(delegate.country)} · ` : ""}${esc(delegate.name)}</option>`
+      `<option value="${esc(delegate.id)}">${esc(delegate.country || "Country not provided")}</option>`
     ).join("");
     if (history.delegates.some((delegate) => String(delegate.id) === selectedId)) select.value = selectedId;
   }
@@ -201,7 +205,7 @@ async function loadDirectory() {
   $("#to").innerHTML = people.length
     ? people.map((p) => {
       const details = [p.country || ROLE_NAME[p.role], p.committee].filter(Boolean).join(" · ");
-      return `<option value="${p.id}">${esc(details)} — ${esc(p.name)}</option>`;
+      return `<option value="${p.id}">${esc(details)}</option>`;
     }).join("")
     : `<option value="" disabled selected>No recipients available</option>`;
 }
@@ -302,7 +306,7 @@ async function enter(u) {
   $("#ec-login").hidden = true; $("#ec-app").hidden = false;
   $("#login-err").textContent = "";
   showStatus("");
-  $("#who-name").textContent = u.name;
+  $("#who-name").textContent = "Signed in";
   $("#who-role").innerHTML = roleLabel(u);
   $("#who-code").textContent = u.code;
   clearReply();

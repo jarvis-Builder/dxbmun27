@@ -14,38 +14,25 @@
     interval = null;
     if (message) state.textContent = message;
   }
-  function showSpeakerTime(prefix, name, country, time) {
+  function showSpeakerTime(prefix, country, time) {
     remainingDisplay.replaceChildren(document.createTextNode(prefix));
     if (country) {
       var countryLabel = document.createElement('strong');
       countryLabel.className = 'speaker-country';
       countryLabel.textContent = country;
       remainingDisplay.appendChild(countryLabel);
-      if (name) {
-        remainingDisplay.appendChild(document.createTextNode(' ('));
-        var countrySpeakerName = document.createElement('span');
-        countrySpeakerName.className = 'speaker-name';
-        countrySpeakerName.textContent = name;
-        remainingDisplay.appendChild(countrySpeakerName);
-        remainingDisplay.appendChild(document.createTextNode(')'));
-      }
-    } else if (name) {
-      var speakerName = document.createElement('span');
-      speakerName.className = 'speaker-name';
-      speakerName.textContent = name;
-      remainingDisplay.appendChild(speakerName);
-    }
+    } else remainingDisplay.appendChild(document.createTextNode('a delegate'));
     if (time) remainingDisplay.appendChild(document.createTextNode(' · ' + time));
     else remainingDisplay.appendChild(document.createTextNode('.'));
   }
   function tick() {
     left = Math.max(0, (deadline - Date.now()) / 1000);
-    showSpeakerTime(left ? 'Speaking: ' : 'Time is up for ', activeSpeaker, activeCountry, left ? format(left) : '');
+    showSpeakerTime(left ? 'Speaking: ' : 'Time is up for ', activeCountry, left ? format(left) : '');
     if (!left) {
       left = 0;
       finished = true;
       draw();
-      stop('Time is up' + (activeSpeaker ? ' for ' + activeSpeaker : '') + '.');
+      stop('Speaker time is up.');
     }
   }
   function makeWheel(box, initial, onChange) {
@@ -247,7 +234,6 @@
   var selectedCommittee = '';
   var currentUser = null;
   var timerKey = '';
-  var activeSpeaker = '';
   var activeCountry = '';
   var loading = false;
   var listSignature = '';
@@ -395,7 +381,6 @@
         draw();
       }
       timerKey = '';
-      activeSpeaker = '';
       activeCountry = '';
       remainingDisplay.textContent = 'No active speaker timer.';
       if (session) state.textContent = 'The chair can start a delegate from the speaking list.';
@@ -417,7 +402,6 @@
     var key = timer.started_at + ':' + timer.speaker + ':' + timer.duration;
     if (key !== timerKey) {
       timerKey = key;
-      activeSpeaker = timer.speaker;
       activeCountry = timer.country || '';
       total = timer.duration;
       left = Math.max(0, timer.started_at + timer.duration - serverNow);
@@ -428,10 +412,10 @@
         clearInterval(interval);
         interval = setInterval(tick, 200);
       } else {
-        stop('Time is up for ' + timer.speaker + '.');
+        stop('Speaker time is up.');
       }
     }
-    showSpeakerTime(timer.remaining ? 'Speaking: ' : 'Time is up for ', timer.speaker, timer.country, timer.remaining
+    showSpeakerTime(timer.remaining ? 'Speaking: ' : 'Time is up for ', timer.country, timer.remaining
       ? format(Math.max(0, deadline - Date.now()) / 1000)
       : '');
     if (timer.remaining) state.textContent = 'Timer started by the chair.';
@@ -526,7 +510,7 @@
     }
     caucusTotalPicker.hidden = pendingSessionMode !== 'moderated_caucus';
     userLabel.textContent = currentUser
-      ? currentUser.name + ' · ' + currentUser.role + (currentUser.committee ? ' · ' + currentUser.committee : '')
+      ? currentUser.role + (currentUser.committee ? ' · ' + currentUser.committee : '')
       : '';
     if (currentUser && !canEdit) {
       showMessage('Only the committee chair can edit the speaking order.');
@@ -540,16 +524,10 @@
       row.className = 'speaker-row';
       var info = document.createElement('span');
       info.className = 'speaker-info';
-      if (speaker.country) {
-        var country = document.createElement('strong');
-        country.className = 'speaker-country';
-        country.textContent = speaker.country;
-        info.appendChild(country);
-      }
-      var name = document.createElement('span');
-      name.className = 'speaker-name';
-      name.textContent = speaker.name;
-      info.appendChild(name);
+      var country = document.createElement('strong');
+      country.className = 'speaker-country';
+      country.textContent = speaker.country || 'Country not provided';
+      info.appendChild(country);
       var speakingTime = document.createElement('small');
       if (session) {
         speakingTime.textContent = 'Common speaking time: ' + format(session.duration);
@@ -580,7 +558,7 @@
               method: 'POST',
               body: JSON.stringify({ speaker_id: speaker.id })
             }).then(function () {
-              showMessage('Timer started for ' + speaker.name + ' (' + format(session.duration) + ').');
+              showMessage('Timer started for ' + (speaker.country || 'the delegate') + ' (' + format(session.duration) + ').');
               return loadSpeakers(false);
             }).catch(function (error) {
               showMessage(error.message, true);
@@ -599,10 +577,10 @@
     placeholder.disabled = true;
     placeholder.selected = true;
     addSelect.appendChild(placeholder);
-    data.eligible.forEach(function (delegate) {
+    data.eligible.forEach(function (delegate, index) {
       var option = document.createElement('option');
       option.value = delegate.id;
-      option.textContent = (delegate.country ? delegate.country + ' · ' : '') + delegate.name;
+      option.textContent = (delegate.country || 'Country not provided') + ' · Delegate ' + (index + 1);
       addSelect.appendChild(option);
     });
     syncTimer(data.timer, data.server_now, session);

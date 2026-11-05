@@ -5,7 +5,7 @@
 /* =====================================================
    4. E-CHITS
    ===================================================== */
-let me = null, pollTimer = null;
+let me = null, pollTimer = null, welcomeTimeout = null;
 const ROLE_NAME = { delegate: "Delegate", chair: "Chair", admin: "Admin" };
 const selectedKind = () => $('input[name="kind"]:checked').value;
 let lastKind = "chit";
@@ -29,6 +29,16 @@ function showStatus(message, isError = false) {
   status.textContent = message;
   status.classList.toggle("err", isError && Boolean(message));
   status.classList.toggle("ok", !isError && Boolean(message));
+}
+
+function showWelcome(name) {
+  const welcome = $("#echits-welcome");
+  clearTimeout(welcomeTimeout);
+  welcome.textContent = `Welcome ${name}`;
+  welcome.hidden = false;
+  welcomeTimeout = setTimeout(() => {
+    welcome.hidden = true;
+  }, 2000);
 }
 
 const roleLabel = (u) => {
@@ -303,6 +313,7 @@ $("#compose-form").addEventListener("submit", async (e) => {
 async function enter(u) {
   me = u;
   clearInterval(pollTimer);
+  showWelcome(u.name);
   $("#ec-login").hidden = true; $("#ec-app").hidden = false;
   $("#login-err").textContent = "";
   showStatus("");

@@ -3,6 +3,34 @@
   background: linear-gradient(145deg, var(--maroon-d), var(--ink) 70%);
 }
 
+.echits-welcome {
+  position: fixed;
+  z-index: 2100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(70% 60% at 85% 25%, rgba(122, 20, 37, .92), transparent 70%), var(--bg);
+  color: var(--cream);
+  font-family: 'Anton', Impact, 'Arial Narrow', sans-serif;
+  font-size: clamp(48px, 12vw, 150px);
+  line-height: .95;
+  text-align: center;
+  text-wrap: balance;
+  text-shadow: 0 0 38px rgba(242, 183, 5, .2);
+  animation: echits-welcome-in .3s ease-out both;
+}
+
+.echits-welcome[hidden] {
+  display: none;
+  animation: none;
+}
+
+@keyframes echits-welcome-in {
+  from { opacity: 0; transform: scale(.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 .echits-sec .head {
   margin-bottom: 28px;
 }
@@ -372,5 +400,11 @@
 
   .chit-history-toolbar select {
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .echits-welcome:not([hidden]) {
+    animation: none;
   }
 }

@@ -189,6 +189,9 @@
 <section class="sec echits-sec" id="echits">
 <div class="wrap">
 <div class="head"><p class="eyebrow disp">DXB MUN · Delegate portal</p><h2 class="disp">E-Chits</h2></div>
+{% if echits_demo_mode %}
+<p class="echits-demo-warning" role="note">Public demo mode: use <b>DEL12345</b>, <b>CHR12345</b> or <b>ADN12345</b> to try E-Chits. Do not enter real or sensitive information. Demo messages may be lost.</p>
+{% endif %}
 <div class="echits-card login" id="ec-login">
 <div>
 <h3 class="disp">Enter your access code</h3>

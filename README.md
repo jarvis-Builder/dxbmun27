@@ -30,6 +30,8 @@ Direct local startup uses the sample access codes and a development-only session
 ## Deploy to Vercel
 Vercel detects the FastAPI application in `app.py` and serves assets from `public/`. E-Chits uses PostgreSQL in production because Vercel's local filesystem is temporary; local `uvicorn app:app --reload` continues to use SQLite.
 
+If none of `SECRET_KEY`, `DATABASE_URL`, or `USERS_CSV` is set, E-Chits runs in public demo mode with the sample accounts and temporary SQLite storage under `/tmp`; no environment-variable setup is needed to try it. Demo accounts and data are public, and data may be lost or differ between function instances. Do not use this mode for real delegates or sensitive messages. Live use still requires the production configuration below.
+
 1. Create a PostgreSQL database (for example, on [Neon](https://neon.tech/)) and copy its pooled connection string. E-Chits reuses a bounded connection pool per application instance; `DB_POOL_MAX_SIZE` defaults to `5` and can be set from `1` to `20` to match the database connection budget.
 2. Import this Git repository as a project in [Vercel](https://vercel.com/). Keep the project root at the repository root and use the detected Python/FastAPI settings.
 3. Add these environment variables to the Vercel project for Production:

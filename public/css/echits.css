@@ -7,6 +7,17 @@
   margin-bottom: 28px;
 }
 
+.echits-demo-warning {
+  max-width: 1040px;
+  margin: 0 0 16px;
+  padding: 14px 18px;
+  border: 1px solid rgba(242, 183, 5, .55);
+  border-radius: 12px;
+  background: rgba(242, 183, 5, .1);
+  color: var(--cream) !important;
+  font-size: 13px;
+}
+
 .echits-card {
   max-width: 1040px;
   padding: clamp(22px, 4vw, 40px);

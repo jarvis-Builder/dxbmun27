@@ -27,9 +27,19 @@ LOCAL_RUN = __name__ == "__main__"
 DEBUG_MODE = os.environ.get("FLASK_DEBUG") == "1"
 LOCAL_MODE = LOCAL_RUN or DEBUG_MODE
 secret_key = os.environ.get("SECRET_KEY")
+vercel_configuration = (secret_key, DATABASE_URL, os.environ.get("USERS_CSV"))
+VERCEL_DEMO_MODE = IS_VERCEL and not any(vercel_configuration)
+if secret_key:
+    session_secret_key = secret_key
+elif VERCEL_DEMO_MODE:
+    session_secret_key = "echits-public-vercel-demo-key-not-for-real-data"
+elif IS_VERCEL:
+    session_secret_key = secrets.token_hex(32)
+else:
+    session_secret_key = "dev-only-change-me"
 if not secret_key and not LOCAL_MODE and not IS_VERCEL:
     raise RuntimeError("Set SECRET_KEY before starting the application outside local debug mode")
-flask_app.secret_key = secret_key or (secrets.token_hex(32) if IS_VERCEL else "dev-only-change-me")
+flask_app.secret_key = session_secret_key
 flask_app.config.update(
     MAX_CONTENT_LENGTH=MAX_UPLOAD_BYTES + 64 * 1024,
     SESSION_COOKIE_HTTPONLY=True,
@@ -40,7 +50,10 @@ flask_app.config.update(
 app = FastAPI(title="E-Chits")
 app.mount("/", WSGIMiddleware(flask_app))
 
-DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE, "echits.db"))
+DB_PATH = os.environ.get(
+    "DB_PATH",
+    "/tmp/echits-demo.db" if VERCEL_DEMO_MODE else os.path.join(BASE, "echits.db"),
+)
 CODE_RE = re.compile(r"^(DEL|CHR|ADN)\d{5}$")
 ROLES = {"DEL": "delegate", "CHR": "chair", "ADN": "admin"}
 FAILS = {}  # ip -> list of failed login times
@@ -56,7 +69,7 @@ class EChitsConfigurationError(Exception):
 
 @flask_app.before_request
 def require_echits_configuration():
-    if not IS_VERCEL or not request.path.startswith("/api/"):
+    if not IS_VERCEL or VERCEL_DEMO_MODE or not request.path.startswith("/api/"):
         return None
     missing = [
         name for name, value in (
@@ -69,6 +82,11 @@ def require_echits_configuration():
         return jsonify(error="E-Chits is not configured. Set these Vercel environment variables: "
                              + ", ".join(missing)), 503
     return None
+
+
+@flask_app.context_processor
+def inject_echits_demo_mode():
+    return {"echits_demo_mode": VERCEL_DEMO_MODE}
 
 
 @flask_app.errorhandler(EChitsConfigurationError)
@@ -168,7 +186,7 @@ def load_users():
         "/etc/secrets/users.csv",           # Render "Secret File" (your real list)
         os.path.join(BASE, "users.csv"),    # local real list (never uploaded to GitHub)
     )
-    if LOCAL_MODE:
+    if LOCAL_MODE or VERCEL_DEMO_MODE:
         candidates += (os.path.join(BASE, "users.sample.csv"),)
     for path in candidates:
         if path and os.path.exists(path):

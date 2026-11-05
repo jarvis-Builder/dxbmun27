@@ -69,8 +69,9 @@ def require_echits_configuration():
     ]
     if missing:
         flask_app.logger.error("Missing required Vercel environment variables: %s", ", ".join(missing))
-        return jsonify(error=(), 503
+        return jsonify(error="Service temporarily unavailable."), 503
     return None
+
 
 @flask_app.errorhandler(EChitsConfigurationError)
 def handle_echits_configuration_error(error):

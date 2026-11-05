@@ -22,10 +22,10 @@ Codes, names and allocations come from `users.csv`
 
 ## Run locally
     pip install -r requirements.txt
-    uvicorn app:app --host 127.0.0.1 --port 5000 --reload
+    FLASK_DEBUG=1 uvicorn app:app --host 127.0.0.1 --port 5000 --reload
 Then open http://127.0.0.1:5000
 
-Direct local startup uses the sample access codes and a development-only session key. To use another port, set `PORT` (for example, `PORT=8000 uvicorn app:app --host 127.0.0.1 --port 8000 --reload`). Never expose the local server or use the sample list in production.
+Local debug startup uses the sample access codes and a development-only session key. To use another port, set `PORT` (for example, `FLASK_DEBUG=1 PORT=8000 uvicorn app:app --host 127.0.0.1 --port 8000 --reload`). Never expose the local server or use the sample list in production.
 
 ## Deploy to Vercel
 Vercel detects the FastAPI application in `app.py` and serves assets from `public/`. E-Chits uses PostgreSQL in production because Vercel's local filesystem is temporary; local `uvicorn app:app --reload` continues to use SQLite.

@@ -65,7 +65,7 @@ $("#ec-tabs").addEventListener("keydown", (e) => {
 });
 
 function personLabel(name, country, role) {
-  return `${esc(name || "—")}${country ? ` (${esc(country)})` : role === "chair" ? " (Chair)" : role === "admin" ? " (Admin)" : ""}`;
+  return `${esc(name || "—")}${country ? ` (<strong>${esc(country)}</strong>)` : role === "chair" ? " (Chair)" : role === "admin" ? " (Admin)" : ""}`;
 }
 
 function msgCard(m, mode) {
@@ -83,7 +83,7 @@ function msgCard(m, mode) {
       ? `From: ${sender} → To: ${personLabel(m.rname, m.rcountry, m.rrole)}`
     : `From: ${sender}` + (mode === "queue" ? ` → ${personLabel(m.rname, m.rcountry, m.rrole)}` : "");
   const metadata = mode === "in" && m.kind === "chit"
-    ? `<div class="meta msg-sender">From: <strong>${sender}</strong></div><div class="meta">${esc(when)}</div>`
+    ? `<div class="meta msg-sender">From: ${sender}</div><div class="meta">${esc(when)}</div>`
     : `<div class="meta">${route} · ${esc(when)}</div>`;
   const attachment = m.document_url
     ? `<p class="attachment-link"><a href="${esc(m.document_url)}" target="_blank" rel="noopener noreferrer">Open Google Docs/Drive document</a></p>`

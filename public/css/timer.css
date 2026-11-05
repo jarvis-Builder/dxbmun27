@@ -34,10 +34,13 @@
 .timer-wheel[aria-disabled="true"]{pointer-events:none}
 .timer-wheel-colon{margin-top:24px;color:var(--accent);font-size:50px;line-height:1;text-shadow:0 0 20px rgba(242,183,5,.28)}
 .speaker-announcement{max-width:100%;margin:24px 0 8px;color:var(--cream);font:clamp(28px,5vw,54px)/1.08 Anton,Impact,sans-serif;letter-spacing:.025em;text-align:center;text-wrap:balance;text-shadow:0 4px 28px rgba(242,183,5,.2)}
+.speaker-announcement strong{color:var(--accent);font-weight:700}
 .speaker-announcement[hidden]{display:none}
 .speaker-announcement:not([hidden]){animation:speaker-announcement-in .35s ease both}
 @keyframes speaker-announcement-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .timer-remaining{margin:18px 0 0;color:var(--cream);font-size:13px;font-weight:700;letter-spacing:.04em;text-align:center}
+.timer-remaining .speaker-country{color:var(--accent);font-weight:700}
+.timer-remaining .speaker-name{font-weight:400}
 .timer-single .timer-state{min-height:26px;margin:20px 0 22px}
 .timer-single .timer-actions{width:min(100%,360px)}
 .timer-state{margin:14px 0 18px;font-size:13px}
@@ -82,7 +85,8 @@
 .speaker-row{display:flex;align-items:center;gap:12px;min-width:0;padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.035);counter-increment:speaker}
 .speaker-row::before{content:counter(speaker,decimal-leading-zero);flex:0 0 30px;color:var(--accent);font:24px/1 Anton,Impact,sans-serif}
 .speaker-info{display:grid;flex:1;min-width:0}
-.speaker-info strong{overflow-wrap:anywhere;font-size:14px}
+.speaker-info .speaker-country{overflow-wrap:anywhere;color:var(--accent);font-size:13px;font-weight:700}
+.speaker-info .speaker-name{overflow-wrap:anywhere;font-size:14px;font-weight:400}
 .speaker-info small{color:var(--muted);font-size:11px}
 .speaker-row-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
 .speaker-row-actions .btn{min-height:38px;padding:0 12px;font-size:10px}

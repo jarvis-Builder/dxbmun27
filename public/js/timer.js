@@ -14,11 +14,33 @@
     interval = null;
     if (message) state.textContent = message;
   }
+  function showSpeakerTime(prefix, name, country, time) {
+    remainingDisplay.replaceChildren(document.createTextNode(prefix));
+    if (country) {
+      var countryLabel = document.createElement('strong');
+      countryLabel.className = 'speaker-country';
+      countryLabel.textContent = country;
+      remainingDisplay.appendChild(countryLabel);
+      if (name) {
+        remainingDisplay.appendChild(document.createTextNode(' ('));
+        var countrySpeakerName = document.createElement('span');
+        countrySpeakerName.className = 'speaker-name';
+        countrySpeakerName.textContent = name;
+        remainingDisplay.appendChild(countrySpeakerName);
+        remainingDisplay.appendChild(document.createTextNode(')'));
+      }
+    } else if (name) {
+      var speakerName = document.createElement('span');
+      speakerName.className = 'speaker-name';
+      speakerName.textContent = name;
+      remainingDisplay.appendChild(speakerName);
+    }
+    if (time) remainingDisplay.appendChild(document.createTextNode(' · ' + time));
+    else remainingDisplay.appendChild(document.createTextNode('.'));
+  }
   function tick() {
     left = Math.max(0, (deadline - Date.now()) / 1000);
-    remainingDisplay.textContent = left && activeSpeaker
-      ? 'Speaking: ' + activeSpeaker + ' · ' + format(left)
-      : 'Time is up' + (activeSpeaker ? ' for ' + activeSpeaker : '') + '.';
+    showSpeakerTime(left ? 'Speaking: ' : 'Time is up for ', activeSpeaker, activeCountry, left ? format(left) : '');
     if (!left) {
       left = 0;
       finished = true;
@@ -226,6 +248,7 @@
   var currentUser = null;
   var timerKey = '';
   var activeSpeaker = '';
+  var activeCountry = '';
   var loading = false;
   var listSignature = '';
   var pendingSessionMode = '';
@@ -373,6 +396,7 @@
       }
       timerKey = '';
       activeSpeaker = '';
+      activeCountry = '';
       remainingDisplay.textContent = 'No active speaker timer.';
       if (session) state.textContent = 'The chair can start a delegate from the speaking list.';
       return;
@@ -383,13 +407,18 @@
         ? 'a Moderated Caucus Speech'
         : '';
     speakerAnnouncement.hidden = !speechLabel || !timer.remaining || !timer.country;
-    speakerAnnouncement.textContent = speakerAnnouncement.hidden
-      ? ''
-      : timer.country + ' is giving ' + speechLabel;
+    speakerAnnouncement.replaceChildren();
+    if (!speakerAnnouncement.hidden) {
+      var announcementCountry = document.createElement('strong');
+      announcementCountry.textContent = timer.country;
+      speakerAnnouncement.appendChild(announcementCountry);
+      speakerAnnouncement.appendChild(document.createTextNode(' is giving ' + speechLabel));
+    }
     var key = timer.started_at + ':' + timer.speaker + ':' + timer.duration;
     if (key !== timerKey) {
       timerKey = key;
       activeSpeaker = timer.speaker;
+      activeCountry = timer.country || '';
       total = timer.duration;
       left = Math.max(0, timer.started_at + timer.duration - serverNow);
       deadline = Date.now() + left * 1000;
@@ -402,9 +431,9 @@
         stop('Time is up for ' + timer.speaker + '.');
       }
     }
-    remainingDisplay.textContent = timer.remaining
-      ? 'Speaking: ' + timer.speaker + ' · ' + format(Math.max(0, deadline - Date.now()) / 1000)
-      : 'Time is up for ' + timer.speaker + '.';
+    showSpeakerTime(timer.remaining ? 'Speaking: ' : 'Time is up for ', timer.speaker, timer.country, timer.remaining
+      ? format(Math.max(0, deadline - Date.now()) / 1000)
+      : '');
     if (timer.remaining) state.textContent = 'Timer started by the chair.';
   }
   function formatName(mode) {
@@ -511,18 +540,20 @@
       row.className = 'speaker-row';
       var info = document.createElement('span');
       info.className = 'speaker-info';
-      var name = document.createElement('strong');
+      if (speaker.country) {
+        var country = document.createElement('strong');
+        country.className = 'speaker-country';
+        country.textContent = speaker.country;
+        info.appendChild(country);
+      }
+      var name = document.createElement('span');
+      name.className = 'speaker-name';
       name.textContent = speaker.name;
       info.appendChild(name);
       var speakingTime = document.createElement('small');
       if (session) {
         speakingTime.textContent = 'Common speaking time: ' + format(session.duration);
         info.appendChild(speakingTime);
-      }
-      if (speaker.country) {
-        var country = document.createElement('small');
-        country.textContent = speaker.country;
-        info.appendChild(country);
       }
       row.appendChild(info);
       if (canEdit || canStart) {
@@ -571,7 +602,7 @@
     data.eligible.forEach(function (delegate) {
       var option = document.createElement('option');
       option.value = delegate.id;
-      option.textContent = delegate.name + (delegate.country ? ' · ' + delegate.country : '');
+      option.textContent = (delegate.country ? delegate.country + ' · ' : '') + delegate.name;
       addSelect.appendChild(option);
     });
     syncTimer(data.timer, data.server_now, session);

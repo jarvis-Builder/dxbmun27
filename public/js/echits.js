@@ -32,8 +32,10 @@ function showStatus(message, isError = false) {
 }
 
 const roleLabel = (u) => {
-  if (u.role === "delegate") return ["Delegate", u.country, u.committee].filter(Boolean).join(" · ");
-  if (u.role === "chair") return ["Chair", u.committee].filter(Boolean).join(" · ");
+  if (u.role === "delegate") {
+    return [u.country ? `<strong>${esc(u.country)}</strong>` : "", "Delegate", esc(u.committee)].filter(Boolean).join(" · ");
+  }
+  if (u.role === "chair") return ["Chair", esc(u.committee)].filter(Boolean).join(" · ");
   return "Admin";
 };
 
@@ -65,7 +67,7 @@ $("#ec-tabs").addEventListener("keydown", (e) => {
 });
 
 function personLabel(name, country, role) {
-  return `${esc(name || "—")}${country ? ` (<strong>${esc(country)}</strong>)` : role === "chair" ? " (Chair)" : role === "admin" ? " (Admin)" : ""}`;
+  return `${country ? `<strong>${esc(country)}</strong> · ` : ""}${esc(name || "—")}${!country && role === "chair" ? " (Chair)" : !country && role === "admin" ? " (Admin)" : ""}`;
 }
 
 function msgCard(m, mode) {
@@ -151,10 +153,11 @@ async function refreshChitHistory() {
   if (select.options.length !== history.delegates.length + 1
       || history.delegates.some((delegate, index) => {
         const option = select.options[index + 1];
-        return !option || option.value !== String(delegate.id) || option.textContent !== delegate.name;
+        const label = `${delegate.country ? `${delegate.country} · ` : ""}${delegate.name}`;
+        return !option || option.value !== String(delegate.id) || option.textContent !== label;
       })) {
     select.innerHTML = `<option value="">Choose a delegate</option>` + history.delegates.map((delegate) =>
-      `<option value="${esc(delegate.id)}">${esc(delegate.name)}${delegate.country ? ` · ${esc(delegate.country)}` : ""}</option>`
+      `<option value="${esc(delegate.id)}">${delegate.country ? `${esc(delegate.country)} · ` : ""}${esc(delegate.name)}</option>`
     ).join("");
     if (history.delegates.some((delegate) => String(delegate.id) === selectedId)) select.value = selectedId;
   }
@@ -198,7 +201,7 @@ async function loadDirectory() {
   $("#to").innerHTML = people.length
     ? people.map((p) => {
       const details = [p.country || ROLE_NAME[p.role], p.committee].filter(Boolean).join(" · ");
-      return `<option value="${p.id}">${esc(p.name)} — ${esc(details)}</option>`;
+      return `<option value="${p.id}">${esc(details)} — ${esc(p.name)}</option>`;
     }).join("")
     : `<option value="" disabled selected>No recipients available</option>`;
 }
@@ -300,7 +303,7 @@ async function enter(u) {
   $("#login-err").textContent = "";
   showStatus("");
   $("#who-name").textContent = u.name;
-  $("#who-role").textContent = roleLabel(u);
+  $("#who-role").innerHTML = roleLabel(u);
   $("#who-code").textContent = u.code;
   clearReply();
   lastKind = "chit";

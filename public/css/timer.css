@@ -77,17 +77,17 @@
 .timer-session-confirm{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px}
 .timer-session-confirm .btn{min-height:42px;padding-inline:16px;font-size:10px}
 .speaker-panel{width:100%;margin:0;padding:clamp(20px,4vw,36px);border:1px solid rgba(255,255,255,.14);border-radius:24px;background:rgba(15,8,10,.88)}
-.speaker-panel-title{margin:0 0 16px;color:var(--accent);font-size:24px}
+.speaker-panel-title{margin:0 0 16px;color:var(--accent);font-size:clamp(28px,4vw,36px)}
 .speaker-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}
 .speaker-toolbar label,.speaker-auth label{color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
 .speaker-toolbar select,.speaker-editor select,.speaker-auth input{min-height:44px;max-width:100%;padding:0 12px;border:1px solid rgba(255,255,255,.24);border-radius:10px;background:#1b0d10;color:var(--cream);font:500 14px 'DM Sans',sans-serif}
 .speaker-list{display:grid;gap:8px;margin:0;padding:0;list-style:none;counter-reset:speaker}
 .speaker-row{display:flex;align-items:center;gap:12px;min-width:0;padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.035);counter-increment:speaker}
-.speaker-row::before{content:counter(speaker,decimal-leading-zero);flex:0 0 30px;color:var(--accent);font:24px/1 Anton,Impact,sans-serif}
+.speaker-row::before{content:counter(speaker,decimal-leading-zero);flex:0 0 36px;color:var(--accent);font:30px/1 Anton,Impact,sans-serif}
 .speaker-info{display:grid;flex:1;min-width:0}
-.speaker-info .speaker-country{overflow-wrap:anywhere;color:var(--accent);font-size:13px;font-weight:700}
+.speaker-info .speaker-country{overflow-wrap:anywhere;color:var(--accent);font-size:18px;font-weight:700}
 .speaker-info .speaker-name{overflow-wrap:anywhere;font-size:14px;font-weight:400}
-.speaker-info small{color:var(--muted);font-size:11px}
+.speaker-info small{color:var(--muted);font-size:14px}
 .speaker-row-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
 .speaker-row-actions .btn{min-height:38px;padding:0 12px;font-size:10px}
 .speaker-empty{padding:10px 0;color:var(--muted);font-size:13px}

@@ -22,19 +22,17 @@ Codes, names and allocations come from `users.csv`
 
 ## Run locally
     pip install -r requirements.txt
-    FLASK_DEBUG=1 uvicorn app:app --host 127.0.0.1 --port 5000 --reload
+    uvicorn app:app --host 127.0.0.1 --port 5000 --reload
 Then open http://127.0.0.1:5000
 
-Local debug startup uses the sample access codes and a development-only session key. To use another port, set `PORT` (for example, `FLASK_DEBUG=1 PORT=8000 uvicorn app:app --host 127.0.0.1 --port 8000 --reload`). Never expose the local server or use the sample list in production.
+Direct local startup uses the sample access codes and a development-only session key. To use another port, set `PORT` (for example, `PORT=8000 uvicorn app:app --host 127.0.0.1 --port 8000 --reload`). Never expose the local server or use the sample list in production.
 
 ## Deploy to Vercel
 Vercel detects the FastAPI application in `app.py` and serves assets from `public/`. E-Chits uses PostgreSQL in production because Vercel's local filesystem is temporary; local `uvicorn app:app --reload` continues to use SQLite.
 
-With no E-Chits environment variables set, Vercel runs in public demo mode using `users.sample.csv` and temporary SQLite storage under `/tmp`. Demo accounts and data are public, and data may be lost or differ between function instances. Do not use this mode for real delegates or sensitive messages. To run a live conference, configure the production database, session key, and private delegate CSV below.
-
 1. Create a PostgreSQL database (for example, on [Neon](https://neon.tech/)) and copy its pooled connection string. E-Chits reuses a bounded connection pool per application instance; `DB_POOL_MAX_SIZE` defaults to `5` and can be set from `1` to `20` to match the database connection budget.
 2. Import this Git repository as a project in [Vercel](https://vercel.com/). Keep the project root at the repository root and use the detected Python/FastAPI settings.
-3. For live use, add these environment variables to the Vercel project for Production:
+3. Add these environment variables to the Vercel project for Production:
    - `DATABASE_URL`: the private PostgreSQL connection string.
    - `SECRET_KEY`: a long, unique random value.
    - `USERS_CSV`: the complete private delegate CSV, including the `code,name,committee,country` header.

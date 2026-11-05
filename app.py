@@ -2,6 +2,7 @@ import csv
 import io
 import os
 import re
+import secrets
 import sqlite3
 import threading
 import time
@@ -27,15 +28,9 @@ LOCAL_RUN = __name__ == "__main__"
 DEBUG_MODE = os.environ.get("FLASK_DEBUG") == "1"
 LOCAL_MODE = LOCAL_RUN or DEBUG_MODE
 secret_key = os.environ.get("SECRET_KEY")
-vercel_configuration = (secret_key, DATABASE_URL, os.environ.get("USERS_CSV"))
-VERCEL_DEMO_MODE = IS_VERCEL and not any(vercel_configuration)
 if not secret_key and not LOCAL_MODE and not IS_VERCEL:
     raise RuntimeError("Set SECRET_KEY before starting the application outside local debug mode")
-session_secret_key = secret_key or (
-    "echits-public-vercel-demo-key-not-for-real-data"
-    if IS_VERCEL else "dev-only-change-me"
-)
-flask_app.secret_key = session_secret_key
+flask_app.secret_key = secret_key or (secrets.token_hex(32) if IS_VERCEL else "dev-only-change-me")
 flask_app.config.update(
     MAX_CONTENT_LENGTH=MAX_UPLOAD_BYTES + 64 * 1024,
     SESSION_COOKIE_HTTPONLY=True,
@@ -44,13 +39,10 @@ flask_app.config.update(
 )
 
 app = FastAPI(title="E-Chits")
-app.add_middleware(SessionMiddleware, secret_key=session_secret_key)
+app.add_middleware(SessionMiddleware, secret_key=secret_key or (secrets.token_hex(32) if IS_VERCEL else "dev-only-change-me"))
 app.mount("/", WSGIMiddleware(flask_app))
 
-DB_PATH = os.environ.get(
-    "DB_PATH",
-    "/tmp/echits-demo.db" if VERCEL_DEMO_MODE else os.path.join(BASE, "echits.db"),
-)
+DB_PATH = os.environ.get("DB_PATH", os.path.join(BASE, "echits.db"))
 CODE_RE = re.compile(r"^(DEL|CHR|ADN)\d{5}$")
 ROLES = {"DEL": "delegate", "CHR": "chair", "ADN": "admin"}
 FAILS = {}  # ip -> list of failed login times
@@ -66,7 +58,7 @@ class EChitsConfigurationError(Exception):
 
 @flask_app.before_request
 def require_echits_configuration():
-    if not IS_VERCEL or VERCEL_DEMO_MODE or not request.path.startswith("/api/"):
+    if not IS_VERCEL or not request.path.startswith("/api/"):
         return None
     missing = [
         name for name, value in (
@@ -76,8 +68,8 @@ def require_echits_configuration():
         ) if not value
     ]
     if missing:
-        flask_app.logger.error("Missing required Vercel environment variables: %s", ", ".join(missing))
-        return jsonify(error="Service temporarily unavailable."), 503
+        return jsonify(error="E-Chits is not configured. Set these Vercel environment variables: "
+                             + ", ".join(missing)), 503
     return None
 
 
@@ -126,11 +118,7 @@ def get_db_pool():
                     max_size=max_size,
                     timeout=10,
                     max_idle=30,
-                    max_lifetime=300,
-                    kwargs={"row_factory": dict_row},
-                    open=False,
-                )
-                DB_POOL.open()
+                    maxOOL.open()
     return DB_POOL
 
 
@@ -178,7 +166,7 @@ def load_users():
         "/etc/secrets/users.csv",           # Render "Secret File" (your real list)
         os.path.join(BASE, "users.csv"),    # local real list (never uploaded to GitHub)
     )
-    if LOCAL_MODE or VERCEL_DEMO_MODE:
+    if LOCAL_MODE:
         candidates += (os.path.join(BASE, "users.sample.csv"),)
     for path in candidates:
         if path and os.path.exists(path):

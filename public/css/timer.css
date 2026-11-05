@@ -79,6 +79,7 @@
 .speaker-empty{padding:10px 0;color:var(--muted);font-size:13px}
 .speaker-editor{margin-top:22px;padding-top:20px;border-top:1px solid rgba(255,255,255,.12)}
 .speaker-editor h2{margin:0 0 12px;color:var(--accent);font-size:22px}
+.speaker-editor>#speaker-add-all{margin-bottom:10px}
 .speaker-editor form{display:flex;gap:8px}
 .speaker-editor select{flex:1;min-width:0}
 .speaker-auth{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-top:22px;padding-top:18px;border-top:1px solid rgba(255,255,255,.12)}

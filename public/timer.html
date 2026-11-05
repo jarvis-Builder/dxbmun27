@@ -29,7 +29,7 @@
 <p class="timer-kicker disp">Committee speaking session</p>
 <p class="timer-wheel-instruction">The chair chooses a speaking format, then sets one common time for every delegate.</p>
 <div class="timer-session-control" id="timer-session-control">
-<p class="timer-session-label">Timer</p>
+<p class="timer-session-label">General-purpose timer</p>
 <button class="btn ghost sm" id="general-timer-setup" type="button">Set up timer</button>
 <div class="general-timer-controls" id="general-timer-controls" hidden>
 <button class="btn sm" id="general-timer-pause" type="button">Pause</button>
@@ -73,8 +73,8 @@
 <button class="btn ghost sm" id="timer-session-cancel" type="button">Cancel</button>
 </div>
 </div>
-<section class="general-timer-display" aria-label="Timer">
-<span class="general-timer-caption disp">Timer</span>
+<section class="general-timer-display" aria-label="General-purpose timer">
+<span class="general-timer-caption disp">General-purpose timer</span>
 <strong id="general-timer-clock">--:--</strong>
 <span id="general-timer-state">No timer running</span>
 </section>
@@ -92,6 +92,7 @@
 <p class="speaker-empty" id="speaker-empty" hidden>No speakers are on this list yet.</p>
 <section class="speaker-editor" id="speaker-editor" hidden>
 <h2 class="disp">Edit speaking order</h2>
+<button class="btn ghost sm" id="speaker-add-all" type="button">Add all delegates</button>
 <form id="speaker-add-form">
 <label class="sr-only" for="speaker-add-select">Delegate to add</label>
 <select id="speaker-add-select" required></select>

@@ -194,6 +194,7 @@
   var speakerEmpty = $('speaker-empty');
   var editor = $('speaker-editor');
   var addForm = $('speaker-add-form');
+  var addAllButton = $('speaker-add-all');
   var addSelect = $('speaker-add-select');
   var loginForm = $('speaker-login-form');
   var accessCode = $('speaker-access-code');
@@ -383,8 +384,12 @@
     payload.committee = selectedCommittee;
     return api('/api/speakers', {
       method: 'POST', body: JSON.stringify(payload)
-    }).then(function () {
-      showMessage('Speaking list updated.');
+    }).then(function (result) {
+      showMessage(payload.action === 'add_all'
+        ? result.added
+          ? result.added + ' delegate' + (result.added === 1 ? '' : 's') + ' added to the speaking order.'
+          : 'All delegates are already on the speaking order.'
+        : 'Speaking list updated.');
       return loadSpeakers(false);
     }).catch(function (error) {
       showMessage(error.message, true);
@@ -404,7 +409,7 @@
     committeeSelect.value = selectedCommittee;
     currentUser = data.user;
     committeeSelect.disabled = !!(currentUser && currentUser.role === 'chair');
-    var canEdit = currentUser && (currentUser.role === 'chair' || currentUser.role === 'admin');
+    var canEdit = currentUser && currentUser.role === 'chair';
     var canStart = currentUser && currentUser.role === 'chair';
     editor.hidden = !canEdit;
     sessionControl.hidden = false;
@@ -420,7 +425,7 @@
     var session = data.session;
     sessionStatus.textContent = session
       ? formatName(session.mode) + ' is active · ' + format(session.duration) + ' per delegate.'
-      : 'No speaking format is active. Choose a duration, then start a format.';
+      : 'No speaking format is active. Choose a format, then set the common speaking time.';
     sessionEnd.hidden = !canStart || !session;
     if (!canStart || (!pendingSessionMode && !pendingGeneralTimer)) durationPicker.hidden = true;
     generalTimerSetup.hidden = !canStart || generalTimerRunning || generalTimerRemaining > 0;
@@ -430,7 +435,7 @@
       ? currentUser.name + ' · ' + currentUser.role + (currentUser.committee ? ' · ' + currentUser.committee : '')
       : '';
     if (currentUser && !canEdit) {
-      showMessage('Signed in as a delegate. Only chairs and admins can edit the list.');
+      showMessage('Only the committee chair can edit the speaking order.');
     } else if (canEdit) {
       showMessage('');
     }
@@ -540,6 +545,9 @@
     event.preventDefault();
     if (!addSelect.value) return;
     postEdit({ action: 'add', delegate_id: addSelect.value });
+  });
+  addAllButton.addEventListener('click', function () {
+    postEdit({ action: 'add_all' });
   });
   loginForm.addEventListener('submit', function (event) {
     event.preventDefault();

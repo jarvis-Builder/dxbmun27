@@ -6,7 +6,7 @@ Website and E-Chits platform for DXB MUN 2027 at Indian High School, Dubai. Conf
 - Home, About, Committees pinwheel (19 committees), 3-day schedule, local Wellness checklist with a completion celebration, Resources and floor timer
 - Three-second DXB MUN opening cinematic (automatically skipped for reduced-motion preferences)
 - Committee wheel selections include a short overview of each committee
-- Shared speaking order and live speaker timer at `/timer.html`; chairs can start GSL, moderated caucus, or round table sessions with a common time and run a separate regular-purpose timer
+- Shared speaking order and live speaker timer at `/timer.html`; the committee chair can add all delegates, reorder the list, and start GSL, moderated caucus, or round table sessions with a common time, alongside a separate general-purpose timer
 - E-Chits: log in with one access code (DEL/CHR/ADN + 5 digits)
   - Delegates: send POI/Other chits, private/public directives, and resolutions with an optional Google Docs/Drive URL or PDF/DOC/DOCX/ODT/TXT attachment (max 3 MB); reply to received chits
   - Choosing Directive opens a private/public visibility prompt; private directives remain visible only to the sender and committee chair, while approved public directives are visible to all logged-in users

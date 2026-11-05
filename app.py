@@ -683,7 +683,7 @@ def speakers():
 
 @flask_app.post("/api/speakers")
 def edit_speakers():
-    user, err = need_login(("chair", "admin"))
+    user, err = need_login(("chair",))
     if err:
         return err
     data = request.get_json(silent=True)
@@ -700,9 +700,34 @@ def edit_speakers():
     ).fetchone()
     if not exists:
         return jsonify(error="Unknown committee"), 400
-    if user["role"] == "chair" and committee != user["committee"]:
+    if committee != user["committee"]:
         return jsonify(error="Chairs may only edit their own committee's list"), 403
 
+    if action == "add_all":
+        delegates = db_execute(
+            db, "SELECT code FROM users WHERE role='delegate' AND committee=? ORDER BY name, code",
+            (committee,),
+        ).fetchall()
+        active_session = db_execute(
+            db, "SELECT duration FROM committee_session WHERE committee=?", (committee,)
+        ).fetchone()
+        duration = active_session["duration"] if active_session else 60
+        position = db_execute(
+            db, "SELECT COALESCE(MAX(position),0)+1 AS next_position "
+                "FROM committee_speakers WHERE committee=?", (committee,),
+        ).fetchone()["next_position"]
+        added = 0
+        for delegate in delegates:
+            result = db_execute(
+                db, "INSERT INTO committee_speakers(committee,user_code,position,duration) "
+                    "VALUES(?,?,?,?) ON CONFLICT(committee,user_code) DO NOTHING",
+                (committee, delegate["code"], position, duration),
+            )
+            if result.rowcount == 1:
+                position += 1
+                added += 1
+        db.commit()
+        return jsonify(ok=True, added=added)
     if action == "add":
         try:
             delegate_id = int(data.get("delegate_id"))

@@ -811,32 +811,28 @@ def edit_speakers():
     ).fetchone()
     if action in ("add", "add_all"):
         if not active_session:
-            return jsonify(error="Start a speaking format before adding delegates to the list."), 409
-        if active_session["mode"] == "unmoderated_caucus":
-            return jsonify(error="The speaking list is not used during an unmoderated caucus."), 409
+            return jsonify(error="Start a GSL before adding delegates to the list."), 409
+        if active_session["mode"] != "gsl":
+            return jsonify(error="The speaking list is only available during a GSL."), 409
 
     if action == "add_all":
         delegates = db_execute(
-            db, "SELECT code FROM users WHERE role='delegate' AND committee=? ORDER BY name, code",
+            db, "SELECT code FROM users WHERE role='delegate' AND committee=?",
             (committee,),
         ).fetchall()
+        secrets.SystemRandom().shuffle(delegates)
         duration = active_session["duration"]
-        position = db_execute(
-            db, "SELECT COALESCE(MAX(position),0)+1 AS next_position "
-                "FROM committee_speakers WHERE committee=?", (committee,),
-        ).fetchone()["next_position"]
-        added = 0
-        for delegate in delegates:
-            result = db_execute(
-                db, "INSERT INTO committee_speakers(committee,user_code,position,duration) "
-                    "VALUES(?,?,?,?) ON CONFLICT(committee,user_code) DO NOTHING",
-                (committee, delegate["code"], position, duration),
-            )
-            if result.rowcount == 1:
-                position += 1
-                added += 1
+        db_execute(db, "DELETE FROM committee_speakers WHERE committee=?", (committee,))
+        db_executemany(
+            db, "INSERT INTO committee_speakers(committee,user_code,position,duration) "
+                "VALUES(?,?,?,?)",
+            [
+                (committee, delegate["code"], position, duration)
+                for position, delegate in enumerate(delegates, 1)
+            ],
+        )
         db.commit()
-        return jsonify(ok=True, added=added)
+        return jsonify(ok=True, added=len(delegates))
     if action == "add":
         try:
             delegate_id = int(data.get("delegate_id"))

@@ -350,7 +350,11 @@ $("#login-form").addEventListener("submit", async (e) => {
   const err = $("#login-err"); err.textContent = "";
   const submit = $("button[type='submit']", e.currentTarget);
   submit.disabled = true;
-  try { await enter(await api("/api/login", { code: $("#code-input").value.trim().toUpperCase() })); }
+  try {
+    const user = await api("/api/login", { code: $("#code-input").value.trim().toUpperCase() });
+    $("#code-input").value = "";
+    await enter(user);
+  }
   catch (x) { leave(); err.textContent = x.message; }
   finally { submit.disabled = false; }
 });
@@ -367,8 +371,8 @@ $("#logout").addEventListener("click", async () => {
 
 (async () => {
   try {
-    const r = await api("/api/me");
-    if (r.user) await enter(r.user);
+    await api("/api/logout", {});
+    leave();
   } catch (e) {
     leave();
     $("#login-err").textContent = e.message || "Unable to connect to E-Chits. Please refresh and try again.";

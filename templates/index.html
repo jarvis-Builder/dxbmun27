@@ -198,9 +198,9 @@
 <h3 class="disp">Enter your access code</h3>
 <p>Your code looks like <b>DEL12345</b>, <b>CHR12345</b> or <b>ADN12345</b>.</p>
 </div>
-<form id="login-form" autocomplete="on">
+<form id="login-form" autocomplete="off">
 <label class="sr-only" for="code-input">Access code</label>
-<input id="code-input" name="access-code" type="text" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="8" pattern="(DEL|CHR|ADN)[0-9]{5}" placeholder="e.g. DEL12345" aria-describedby="code-hint login-err" required>
+<input id="code-input" name="access-code" type="text" autocomplete="off" inputmode="text" autocapitalize="characters" spellcheck="false" maxlength="8" pattern="(DEL|CHR|ADN)[0-9]{5}" placeholder="e.g. DEL12345" aria-describedby="code-hint login-err" required>
 <button class="btn" type="submit">Log in</button>
 <p class="sr-only" id="code-hint">Enter your eight-character delegate, chair, or admin access code.</p>
 <p class="echits-error" id="login-err" role="alert" aria-live="assertive"></p>

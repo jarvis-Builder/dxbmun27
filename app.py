@@ -45,6 +45,7 @@ flask_app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=IS_VERCEL or os.environ.get("SESSION_COOKIE_SECURE") == "1",
+    SESSION_PERMANENT=False,
 )
 
 app = FastAPI(title="E-Chits")
@@ -661,6 +662,7 @@ def login():
         FAILS[ip].append(now)
         return jsonify(error="Code not recognised. Check it and try again."), 401
     session.clear()
+    session.permanent = False
     session["code"] = code
     return jsonify(user_dict(u))
 

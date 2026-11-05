@@ -5,6 +5,39 @@ var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var fine = window.matchMedia('(pointer: fine)').matches;
 function $(id) { return document.getElementById(id); }
 
+// ---------- Opening cinematic ----------
+var opening = $('opening-screen');
+if (opening) {
+  if (reduce) {
+    opening.remove();
+  } else {
+    var pageParts = [
+      document.querySelector('body > header'),
+      document.querySelector('body > main'),
+      document.querySelector('body > footer')
+    ];
+    var openingFinished = false;
+    function finishOpening() {
+      if (openingFinished) return;
+      openingFinished = true;
+      opening.remove();
+      pageParts.forEach(function (part) {
+        if (part) part.removeAttribute('inert');
+      });
+      document.body.classList.remove('intro-playing');
+    }
+    pageParts.forEach(function (part) {
+      if (part) part.setAttribute('inert', '');
+    });
+    document.body.classList.add('intro-playing');
+    opening.addEventListener('animationend', function (event) {
+      if (event.target !== opening || event.animationName !== 'opening-dismiss') return;
+      finishOpening();
+    });
+    window.setTimeout(finishOpening, 3100);
+  }
+}
+
 // ---------- Mobile menu ----------
 var burger = $('burger');
 var links = $('links');
@@ -65,7 +98,7 @@ function burstAt(el, n) {
 var rail = $('rail');
 var btns = [].slice.call(rail.querySelectorAll('button'));
 var cur = 0;
-var swapEls = ['cm-idx', 'cm-a', 'cm-n'].map($);
+var swapEls = ['cm-idx', 'cm-a', 'cm-n', 'cm-desc'].map($);
 var spot = $('spot');
 
 function show(i, animate, fromWheel) {
@@ -76,6 +109,7 @@ function show(i, animate, fromWheel) {
   if (!fromWheel && wheelReady && mod(Math.round(target)) !== cur) spinTo(cur);
   $('cm-a').textContent = b.dataset.a;
   $('cm-n').textContent = b.dataset.n;
+  $('cm-desc').textContent = b.dataset.d;
   $('cm-idx').textContent = ('0' + (cur + 1)).slice(-2) + ' / ' + btns.length;
   if (animate !== false && !reduce) {
     swapEls.forEach(function (el, k) {

@@ -7,9 +7,13 @@
    ===================================================== */
 let me = null, pollTimer = null;
 const ROLE_NAME = { delegate: "Delegate", chair: "Chair", admin: "Admin" };
+const selectedKind = () => $('input[name="kind"]:checked').value;
+let lastKind = "chit";
 
 async function api(path, body) {
-  const opt = body !== undefined ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {};
+  const opt = body === undefined ? {} : body instanceof FormData
+    ? { method: "POST", body }
+    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
   const r = await fetch(path, opt);
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
@@ -41,6 +45,9 @@ function showTab(name) {
     b.tabIndex = selected ? 0 : -1;
   });
   $$(".ec-panel").forEach((p) => (p.hidden = p.dataset.panel !== name));
+  if (name === "chit-history" && me?.role === "chair") {
+    refreshChitHistory().catch((error) => showStatus(error.message || "Unable to load chit history.", true));
+  }
 }
 $("#ec-tabs").addEventListener("click", (e) => {
   const button = e.target.closest("button[data-tab]");
@@ -63,9 +70,26 @@ function personLabel(name, country, role) {
 
 function msgCard(m, mode) {
   const when = new Date(m.created * 1000).toLocaleString();
+  const sender = personLabel(m.sname, m.scountry, m.srole);
+  const typeLabel = m.kind === "chit"
+    ? m.subtype === "poi" ? "POI" : "CHIT"
+    : m.kind.toUpperCase();
+  const detail = m.kind === "chit" && m.subtype
+    ? m.subtype === "poi" ? "POI" : "Other"
+    : m.kind === "directive" && m.visibility ? m.visibility : "";
   const route = mode === "sent"
     ? `To: ${personLabel(m.rname, m.rcountry, m.rrole)}`
-    : `From: ${personLabel(m.sname, m.scountry, m.srole)}` + (mode === "queue" ? ` → ${personLabel(m.rname, m.rcountry, m.rrole)}` : "");
+    : mode === "history"
+      ? `From: ${sender} → To: ${personLabel(m.rname, m.rcountry, m.rrole)}`
+    : `From: ${sender}` + (mode === "queue" ? ` → ${personLabel(m.rname, m.rcountry, m.rrole)}` : "");
+  const metadata = mode === "in" && m.kind === "chit"
+    ? `<div class="meta msg-sender">From: <strong>${sender}</strong></div><div class="meta">${esc(when)}</div>`
+    : `<div class="meta">${route} · ${esc(when)}</div>`;
+  const attachment = m.document_url
+    ? `<p class="attachment-link"><a href="${esc(m.document_url)}" target="_blank" rel="noopener noreferrer">Open Google Docs/Drive document</a></p>`
+    : m.attachment_name
+      ? `<p class="attachment-link"><a href="/api/messages/${m.id}/attachment">Download ${esc(m.attachment_name)}</a></p>`
+      : "";
   const actions = mode === "queue"
     ? `<div class="actions">
          <input placeholder="Optional note to sender">
@@ -75,10 +99,11 @@ function msgCard(m, mode) {
   const replyAction = mode === "in" && m.kind === "chit"
     ? `<button type="button" class="btn gold reply-btn" data-reply="${m.id}">Reply</button>` : "";
   return `<div class="msg" data-id="${m.id}">
-    <div class="msg-top"><span class="tag">${esc(m.kind)}</span><span class="tag ${esc(m.status)}">${esc(m.status)}</span></div>
+    <div class="msg-top"><span class="msg-type msg-type-${esc(m.kind)}">${esc(typeLabel)}</span>${detail && detail !== typeLabel ? `<span class="tag">${esc(detail)}</span>` : ""}<span class="tag ${esc(m.status)}">${esc(m.status)}</span></div>
     <h4>${esc(m.subject)}</h4>
-    <div class="meta">${route} · ${esc(when)}</div>
+    ${metadata}
     <div class="body">${esc(m.body)}</div>
+    ${attachment}
     ${m.note ? `<div class="note">Chair note: ${esc(m.note)}</div>` : ""}
     ${actions}
     ${replyAction}
@@ -94,12 +119,14 @@ async function refresh() {
     $('[data-panel="sent"]').innerHTML = box.sent.map((m) => msgCard(m, "sent")).join("") || empty("You haven't sent anything yet.");
     $("#cnt-inbox").textContent = box.received.length;
     if (me.role !== "delegate") {
-      const q = await api("/api/queue");
-      $("#cnt-queue").textContent = q.length;
+      $("#cnt-queue").textContent = box.queue.length;
       const panel = $('[data-panel="queue"]');
       if (!document.activeElement.matches("#panel-queue input")) {   // don't wipe a note you're typing
-        panel.innerHTML = q.map((m) => msgCard(m, "queue")).join("") || empty("Nothing waiting for approval.");
+        panel.innerHTML = box.queue.map((m) => msgCard(m, "queue")).join("") || empty("Nothing waiting for approval.");
       }
+    }
+    if (me.role === "chair" && $("#tab-chit-history").getAttribute("aria-selected") === "true") {
+      await refreshChitHistory();
     }
     showStatus("");
   } catch (e) {
@@ -110,6 +137,29 @@ async function refresh() {
       showStatus(e.message || "Unable to refresh E-Chits. Please try again.", true);
     }
   }
+}
+
+$("[data-panel='chit-history']").addEventListener("change", (event) => {
+  if (event.target.id !== "chit-history-delegate" || !me || me.role !== "chair") return;
+  refreshChitHistory().catch((error) => showStatus(error.message || "Unable to load chit history.", true));
+});
+
+async function refreshChitHistory() {
+  const select = $("#chit-history-delegate");
+  const selectedId = select.value;
+  const history = await api("/api/chit-history" + (selectedId ? `?delegate_id=${encodeURIComponent(selectedId)}` : ""));
+  if (select.options.length !== history.delegates.length + 1
+      || history.delegates.some((delegate, index) => {
+        const option = select.options[index + 1];
+        return !option || option.value !== String(delegate.id) || option.textContent !== delegate.name;
+      })) {
+    select.innerHTML = `<option value="">Choose a delegate</option>` + history.delegates.map((delegate) =>
+      `<option value="${esc(delegate.id)}">${esc(delegate.name)}${delegate.country ? ` · ${esc(delegate.country)}` : ""}</option>`
+    ).join("");
+    if (history.delegates.some((delegate) => String(delegate.id) === selectedId)) select.value = selectedId;
+  }
+  $("#chit-history-messages").innerHTML = history.messages.map((message) => msgCard(message, "history")).join("")
+    || empty(select.value ? "No chit history for this delegate yet." : "Select a delegate to view their chit history.");
 }
 
 $('[data-panel="queue"]').addEventListener("click", async (e) => {
@@ -131,14 +181,14 @@ $('[data-panel="inbox"]').addEventListener("click", (e) => {
   const card = button.closest(".msg");
   const subject = $("h4", card).textContent.trim();
   $("#reply-to-id").value = button.dataset.reply;
-  $("#kind").value = "chit";
-  $("#kind").disabled = true;
+  $('input[name="kind"][value="chit"]').checked = true;
+  $("#kind-options").disabled = true;
   $("#to-wrap").hidden = true;
-  $("#kind-hint").textContent = "Your reply will be sent to the original sender.";
   $("#subject").value = (/^re:/i.test(subject) ? subject : `Re: ${subject}`).slice(0, 120);
   $("#body").value = "";
   $("#send-msg").textContent = "";
   $("#send-msg").className = "ok";
+  updateKindHint();
   showTab("compose");
   $("#body").focus();
 });
@@ -154,18 +204,49 @@ async function loadDirectory() {
 }
 
 function updateKindHint() {
-  const k = $("#kind").value;
+  const k = selectedKind();
   const replying = Boolean($("#reply-to-id").value);
+  $("#chit-options").hidden = k !== "chit";
+  $("#resolution-attachment").hidden = k !== "resolution" || me.role !== "delegate";
   $("#to-wrap").hidden = k !== "chit" || replying;
-  $("#kind-hint").textContent = replying ? "Your reply will be sent to the original sender."
-    : k === "chit" ? (me.role === "delegate" ? "Chits to other delegates are checked by your chair before delivery. Chits to the chair or admin are delivered instantly." : "Delivered instantly.")
-    : "Goes to your chair for approval.";
+  const visibility = $('input[name="visibility"]:checked');
+  $("#kind-hint").textContent = replying ? "Your reply will be sent to the original sender in your committee."
+    : k === "chit" ? (me.role === "delegate" ? "You can send chits only to people in your committee. Chits to other delegates are checked by your chair." : "Delivered instantly.")
+    : k === "directive" && visibility && visibility.value === "public"
+      ? "After chair approval, everyone will be able to see this directive."
+      : k === "directive" ? "Only you and your chair will be able to see this directive."
+      : "Goes to your chair for approval.";
 }
-$("#kind").addEventListener("change", updateKindHint);
+$("#kind-options").addEventListener("change", () => {
+  if (selectedKind() === "directive") {
+    $("#directive-dialog").showModal();
+  } else {
+    lastKind = selectedKind();
+    updateKindHint();
+  }
+});
+$$('#directive-options input[name="visibility"]').forEach((input) => {
+  input.addEventListener("click", () => {
+    input.checked = true;
+    $("#directive-dialog").close();
+    updateKindHint();
+    $("#subject").focus();
+  });
+});
+function cancelDirectiveSelection() {
+  $(`input[name="kind"][value="${lastKind}"]`).checked = true;
+  $("#directive-dialog").close();
+  updateKindHint();
+}
+$("#directive-cancel").addEventListener("click", cancelDirectiveSelection);
+$("#directive-dialog").addEventListener("cancel", (event) => {
+  event.preventDefault();
+  cancelDirectiveSelection();
+});
 
 function clearReply() {
   $("#reply-to-id").value = "";
-  $("#kind").disabled = false;
+  $("#kind-options").disabled = false;
   if (me) updateKindHint();
 }
 
@@ -175,18 +256,38 @@ $("#compose-form").addEventListener("submit", async (e) => {
   const submit = $("button[type='submit']", e.currentTarget);
   submit.disabled = true;
   try {
-    const kind = $("#kind").value;
+    const kind = selectedKind();
     const replyTo = $("#reply-to-id").value;
-    const r = await api("/api/send", {
+    const payload = {
       kind,
       to: kind === "chit" && !replyTo ? $("#to").value : null,
       reply_to: replyTo || null,
+      subtype: kind === "chit" ? $('input[name="chit_type"]:checked').value : null,
+      visibility: kind === "directive" ? $('input[name="visibility"]:checked').value : null,
+      doc_url: kind === "resolution" ? $("#resolution-url").value : null,
       subject: $("#subject").value,
       body: $("#body").value,
-    });
+    };
+    const file = $("#resolution-file").files[0];
+    let requestBody = payload;
+    if (kind === "resolution" && file) {
+      requestBody = new FormData();
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value !== null && value !== "") requestBody.append(key, value);
+      });
+      requestBody.append("document", file);
+    }
+    const r = await api("/api/send", requestBody);
     msg.textContent = r.status === "pending" ? "Sent! Waiting for chair approval." : "Sent!";
     $("#subject").value = ""; $("#body").value = "";
+    $("#resolution-url").value = "";
+    $("#resolution-file").value = "";
     clearReply();
+    if (kind === "directive") {
+      $('input[name="kind"][value="chit"]').checked = true;
+      lastKind = "chit";
+      updateKindHint();
+    }
     await refresh();
   } catch (x) { msg.className = "err"; msg.textContent = x.message; }
   finally { submit.disabled = false; }
@@ -202,10 +303,14 @@ async function enter(u) {
   $("#who-role").textContent = roleLabel(u);
   $("#who-code").textContent = u.code;
   clearReply();
+  lastKind = "chit";
   $("#tab-queue").hidden = u.role === "delegate";
-  $("#kind").innerHTML = u.role === "delegate"
-    ? `<option value="chit">Chit</option><option value="directive">Directive</option><option value="resolution">Resolution</option>`
-    : `<option value="chit">Chit</option>`;
+  $("#queue-label").textContent = u.role === "admin" ? "All approvals" : "Approvals";
+  $("#tab-chit-history").hidden = u.role !== "chair";
+  $$('#kind-options input[name="kind"]').forEach((input) => {
+    input.closest("label").hidden = u.role !== "delegate" && input.value !== "chit";
+  });
+  $('input[name="kind"][value="chit"]').checked = true;
   updateKindHint();
   showTab("inbox");
   await loadDirectory();
@@ -215,6 +320,7 @@ async function enter(u) {
 
 function leave() {
   me = null; clearInterval(pollTimer);
+  if ($("#directive-dialog").open) $("#directive-dialog").close();
   clearReply();
   $("#ec-app").hidden = true; $("#ec-login").hidden = false;
   $("#code-input").value = "";
@@ -247,7 +353,7 @@ $("#logout").addEventListener("click", async () => {
     if (r.user) await enter(r.user);
   } catch (e) {
     leave();
-    $("#login-err").textContent = "Unable to connect to E-Chits. Please refresh and try again.";
+    $("#login-err").textContent = e.message || "Unable to connect to E-Chits. Please refresh and try again.";
   }
 })();
 

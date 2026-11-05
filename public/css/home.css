@@ -139,6 +139,7 @@ h2{margin:0 0 36px;font-size:clamp(56px,10vw,150px);line-height:.88}
 .cm-idx{margin:0 0 8px;font-size:18px;letter-spacing:.24em;opacity:.8}
 .cm-a{margin:0;font-size:clamp(64px,13vw,180px);line-height:.85;color:var(--accent);overflow-wrap:anywhere}
 .cm-n{margin:16px 0 26px;font-size:clamp(20px,3vw,38px);line-height:1.1;letter-spacing:.06em;max-width:780px}
+.cm-desc{max-width:720px;margin:-10px 0 26px;color:var(--muted);font-size:clamp(14px,1.5vw,17px);line-height:1.75}
 .spot-actions{display:flex;flex-wrap:wrap;gap:10px}
 .swap{animation:swap .5s cubic-bezier(.2,.7,.2,1) backwards}
 @keyframes swap{from{opacity:0;transform:translateY(22px)}}
@@ -185,6 +186,14 @@ h2{margin:0 0 36px;font-size:clamp(56px,10vw,150px);line-height:.88}
 .wellness-intro h3{margin:0;color:var(--accent);font-size:clamp(26px,4vw,38px);line-height:1}
 .wellness-intro>p{margin:8px 0 0;color:var(--muted)}
 .wellness-intro .wellness-status{margin-top:14px;color:var(--cream);font-size:13px;font-weight:700}
+.wellness-intro .wellness-celebration{display:flex;align-items:center;gap:8px;margin:12px 0 0;color:var(--accent);font-size:13px;font-weight:700}
+.wellness-celebration[hidden]{display:none}
+.wellness-celebration span{display:inline-block;font-size:20px}
+.wellness-celebration.is-celebrating{animation:wellness-celebrate .45s ease-out both}
+.wellness-celebration.is-celebrating span{animation:wellness-sparkle .7s ease-out both}
+@keyframes wellness-celebrate{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes wellness-sparkle{0%{transform:rotate(-30deg) scale(.5)}60%{transform:rotate(25deg) scale(1.35)}100%{transform:rotate(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.wellness-celebration.is-celebrating,.wellness-celebration.is-celebrating span{animation:none}}
 .wellness-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;min-width:0;margin:0;padding:0;border:0}
 .wellness-item{display:flex;min-height:74px;align-items:center;justify-content:center;gap:8px;padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:16px;background:var(--card);color:var(--cream);font-size:13px;font-weight:700;text-align:center;cursor:pointer;transition:background .2s,border-color .2s,color .2s}
 .wellness-item.is-checked{border-color:var(--accent);background:var(--accent);color:var(--ink)}
@@ -308,3 +317,11 @@ footer{position:relative;overflow:hidden;padding:80px 0 28px;background:var(--bg
 .wheel-box{width:min(100%,250px)}
 .wheel{height:270px}
 }
+
+/* ---------- opening wordmark ---------- */
+body.intro-playing{overflow:hidden}
+.opening-screen{position:fixed;z-index:2000;inset:0;display:grid;place-items:center;overflow:hidden;background:radial-gradient(70% 60% at 85% 25%,rgba(122,20,37,.85),transparent 70%),var(--bg);color:var(--cream);animation:opening-dismiss .8s ease 2.2s forwards}
+.opening-wordmark{margin:0;padding:0 3vw;font-size:clamp(72px,20vw,360px);line-height:.85;letter-spacing:-.045em;white-space:nowrap;color:var(--cream);text-shadow:0 0 38px rgba(242,183,5,.16);animation:opening-wordmark-in 2.8s cubic-bezier(.2,.75,.25,1) both}
+@keyframes opening-wordmark-in{0%{opacity:0;filter:blur(16px);transform:scale(.78)}24%{opacity:1;filter:blur(0);transform:scale(1)}72%{opacity:1;transform:scale(1.025)}100%{opacity:0;filter:blur(6px);transform:scale(1.08)}}
+@keyframes opening-dismiss{0%{opacity:1;visibility:visible}99%{opacity:0;visibility:visible}100%{opacity:0;visibility:hidden}}
+@media(prefers-reduced-motion:reduce){.opening-screen{display:none;animation:none}.opening-wordmark{animation:none}}

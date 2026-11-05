@@ -19,6 +19,10 @@
 </head>
 <body>
 
+<div class="opening-screen" id="opening-screen" aria-hidden="true">
+<h1 class="opening-wordmark disp">DXBMUN</h1>
+</div>
+
 <!-- Navigation -->
 <header class="nav" id="top">
 <a class="logo disp" href="#home">DXB <span>MUN</span></a>
@@ -101,6 +105,7 @@
 <p class="cm-idx disp" id="cm-idx">01 / 19</p>
 <h3 class="cm-a disp" id="cm-a">IPMC</h3>
 <p class="cm-n disp" id="cm-n">Indian Prime Minister’s Cabinet</p>
+<p class="cm-desc" id="cm-desc">Delegates take on the roles of Indian government ministers during a national crisis. They debate urgent domestic and foreign-policy challenges, share updates, and respond to developments. The cabinet works together to coordinate decisions and shape the government’s course of action.</p>
 <div class="spot-actions">
 <button class="btn sm" id="prev" type="button" aria-label="Previous committee">←</button>
 <button class="btn sm" id="next" type="button" aria-label="Next committee">→</button>
@@ -115,25 +120,25 @@
 </div>
 
 <div class="grid" id="rail" role="group" aria-label="Committees" hidden>
-<button type="button" data-a="IPMC" data-n="Indian Prime Minister’s Cabinet" aria-current="true"><b>IPMC</b><small>Indian Prime Minister’s Cabinet</small></button>
-<button type="button" data-a="HCC" data-n="Historic Crisis Committee"><b>HCC</b><small>Historic Crisis Committee</small></button>
-<button type="button" data-a="IPC" data-n="International Press Corps"><b>IPC</b><small>International Press Corps</small></button>
-<button type="button" data-a="WHO" data-n="World Health Organization"><b>WHO</b><small>World Health Organization</small></button>
-<button type="button" data-a="ECOSOC" data-n="Economic and Social Council"><b>ECOSOC</b><small>Economic and Social Council</small></button>
-<button type="button" data-a="AU" data-n="African Union"><b>AU</b><small>African Union</small></button>
-<button type="button" data-a="EU" data-n="European Union"><b>EU</b><small>European Union</small></button>
-<button type="button" data-a="ICJ" data-n="International Court of Justice"><b>ICJ</b><small>International Court of Justice</small></button>
-<button type="button" data-a="DISEC" data-n="Disarmament and International Security Committee"><b>DISEC</b><small>Disarmament and International Security Committee</small></button>
-<button type="button" data-a="UNODC" data-n="United Nations Office on Drugs and Crime"><b>UNODC</b><small>United Nations Office on Drugs and Crime</small></button>
-<button type="button" data-a="UNEP" data-n="United Nations Environment Program"><b>UNEP</b><small>United Nations Environment Program</small></button>
-<button type="button" data-a="UNOOSA" data-n="United Nations Office for Outer Space Affairs"><b>UNOOSA</b><small>United Nations Office for Outer Space Affairs</small></button>
-<button type="button" data-a="UNSC" data-n="United Nations Security Council"><b>UNSC</b><small>United Nations Security Council</small></button>
-<button type="button" data-a="UNHRC" data-n="United Nations Human Rights Council"><b>UNHRC</b><small>United Nations Human Rights Council</small></button>
-<button type="button" data-a="UNCSW" data-n="United Nations Commission on the Status of Women"><b>UNCSW</b><small>United Nations Commission on the Status of Women</small></button>
-<button type="button" data-a="UNCSTD" data-n="United Nations Commission on Science and Technology for Development"><b>UNCSTD</b><small>United Nations Commission on Science and Technology for Development</small></button>
-<button type="button" data-a="SOCHUM" data-n="Social, Humanitarian, and Cultural Committee"><b>SOCHUM</b><small>Social, Humanitarian, and Cultural Committee</small></button>
-<button type="button" data-a="INTERPOL" data-n="International Criminal Police Organization"><b>INTERPOL</b><small>International Criminal Police Organization</small></button>
-<button type="button" data-a="NATO" data-n="North Atlantic Treaty Organization"><b>NATO</b><small>North Atlantic Treaty Organization</small></button>
+<button type="button" data-a="IPMC" data-n="Indian Prime Minister’s Cabinet" data-d="Delegates take on the roles of Indian government ministers during a national crisis. They debate urgent domestic and foreign-policy challenges, share updates, and respond to developments. The cabinet works together to coordinate decisions and shape the government’s course of action." aria-current="true"><b>IPMC</b><small>Indian Prime Minister’s Cabinet</small></button>
+<button type="button" data-a="HCC" data-n="Historic Crisis Committee" data-d="Delegates step into a pivotal moment from history and represent the people or institutions involved. They assess fast-changing events, negotiate with allies and rivals, and choose how to respond. Their decisions shape how the crisis unfolds while working within the historical setting."><b>HCC</b><small>Historic Crisis Committee</small></button>
+<button type="button" data-a="IPC" data-n="International Press Corps" data-d="Delegates work as journalists reporting on the conference and its unfolding debates. They investigate developments, interview participants, and produce clear, engaging coverage. The committee focuses on accuracy, diverse perspectives, and the influence of the press on public understanding."><b>IPC</b><small>International Press Corps</small></button>
+<button type="button" data-a="WHO" data-n="World Health Organization" data-d="Delegates represent countries addressing major international public-health challenges. They examine evidence, compare national needs, and negotiate practical ways to prevent illness and improve health systems. Their work may include coordinating responses, sharing resources, and recommending policies that countries can adapt."><b>WHO</b><small>World Health Organization</small></button>
+<button type="button" data-a="ECOSOC" data-n="Economic and Social Council" data-d="Delegates consider international economic, social, and development issues. They discuss how governments and partner organizations can cooperate to improve living standards and expand opportunity. Participants negotiate recommendations that connect sustainable development with practical social and economic policies."><b>ECOSOC</b><small>Economic and Social Council</small></button>
+<button type="button" data-a="AU" data-n="African Union" data-d="Delegates represent member states of the African Union and address shared regional priorities. They debate cooperation on peace and security, development, trade, and continental institutions. Through negotiation, they work toward solutions that reflect the interests and circumstances of African states."><b>AU</b><small>African Union</small></button>
+<button type="button" data-a="EU" data-n="European Union" data-d="Delegates represent European Union member states discussing issues that cross national borders. They negotiate common approaches while balancing shared goals with each country’s priorities. The committee may focus on cooperation in areas such as security, migration, the economy, or climate policy."><b>EU</b><small>European Union</small></button>
+<button type="button" data-a="ICJ" data-n="International Court of Justice" data-d="Participants examine a legal dispute between states using the principles and procedures of international law. They consider the facts, assess legal arguments, and present evidence and reasoning. The goal is to deliberate impartially and reach a reasoned judgment on the case before the court."><b>ICJ</b><small>International Court of Justice</small></button>
+<button type="button" data-a="DISEC" data-n="Disarmament and International Security Committee" data-d="Delegates address international peace and security, including arms control and disarmament. They represent national positions, evaluate security risks, and negotiate measures to reduce conflict and build trust. Their proposals aim to balance collective security with states’ legitimate concerns."><b>DISEC</b><small>Disarmament and International Security Committee</small></button>
+<button type="button" data-a="UNODC" data-n="United Nations Office on Drugs and Crime" data-d="Delegates tackle transnational crime, illicit drugs, corruption, and related challenges. They consider how countries can strengthen prevention, justice systems, and cross-border cooperation. The committee develops responses that respect human rights while addressing the causes and impacts of crime."><b>UNODC</b><small>United Nations Office on Drugs and Crime</small></button>
+<button type="button" data-a="UNEP" data-n="United Nations Environment Program" data-d="Delegates discuss environmental challenges that require action across borders. They evaluate policy options on issues such as pollution, biodiversity, and climate pressures. Through negotiation, they propose cooperative steps that support a healthier environment and sustainable development."><b>UNEP</b><small>United Nations Environment Program</small></button>
+<button type="button" data-a="UNOOSA" data-n="United Nations Office for Outer Space Affairs" data-d="Delegates explore how countries can cooperate in the peaceful and responsible use of outer space. They consider space sustainability, access to space technology, and the rules that guide international activity. Participants seek practical agreements that preserve space for future generations and benefit people on Earth."><b>UNOOSA</b><small>United Nations Office for Outer Space Affairs</small></button>
+<button type="button" data-a="UNSC" data-n="United Nations Security Council" data-d="Delegates represent Security Council members responding to threats to international peace and security. They assess a situation, debate possible measures, and negotiate resolutions. Members must weigh urgency, national interests, and the council’s responsibility to seek collective action."><b>UNSC</b><small>United Nations Security Council</small></button>
+<button type="button" data-a="UNHRC" data-n="United Nations Human Rights Council" data-d="Delegates examine human-rights conditions and consider ways to protect fundamental freedoms. They discuss evidence, hear different national perspectives, and negotiate recommendations or initiatives. The committee works to promote respect for human rights through dialogue, scrutiny, and international cooperation."><b>UNHRC</b><small>United Nations Human Rights Council</small></button>
+<button type="button" data-a="UNCSW" data-n="United Nations Commission on the Status of Women" data-d="Delegates address gender equality and the advancement of women and girls. They consider barriers to equal participation and debate policies that improve rights, safety, and opportunity. Their work focuses on practical commitments and cooperation across countries and communities."><b>UNCSW</b><small>United Nations Commission on the Status of Women</small></button>
+<button type="button" data-a="UNCSTD" data-n="United Nations Commission on Science and Technology for Development" data-d="Delegates explore how science, technology, and innovation can support development. They discuss unequal access, responsible use, and ways to share knowledge and build capacity. The committee develops recommendations that help countries benefit from technological progress while addressing its challenges."><b>UNCSTD</b><small>United Nations Commission on Science and Technology for Development</small></button>
+<button type="button" data-a="SOCHUM" data-n="Social, Humanitarian, and Cultural Committee" data-d="Delegates address social and humanitarian issues, including the protection of vulnerable communities. They discuss human rights, culture, inclusion, and international relief efforts. Participants negotiate responses that respect people’s dignity and can be supported through cooperation among states."><b>SOCHUM</b><small>Social, Humanitarian, and Cultural Committee</small></button>
+<button type="button" data-a="INTERPOL" data-n="International Criminal Police Organization" data-d="Delegates represent member countries cooperating against international crime. They examine how law-enforcement agencies can share information and coordinate investigations across borders. The committee considers effective cooperation while respecting national laws, due process, and human rights."><b>INTERPOL</b><small>International Criminal Police Organization</small></button>
+<button type="button" data-a="NATO" data-n="North Atlantic Treaty Organization" data-d="Delegates represent NATO members discussing collective defence and security challenges. They assess risks, consult on allied responses, and negotiate ways to maintain cooperation and deterrence. Debate centers on shared commitments while recognizing the differing perspectives of member states."><b>NATO</b><small>North Atlantic Treaty Organization</small></button>
 </div>
 </div>
 </section>
@@ -208,16 +213,55 @@
 <button type="button" role="tab" id="tab-inbox" aria-selected="true" aria-controls="panel-inbox" data-tab="inbox" class="on">Inbox <i id="cnt-inbox">0</i></button>
 <button type="button" role="tab" id="tab-compose" aria-selected="false" aria-controls="panel-compose" data-tab="compose">Compose</button>
 <button type="button" role="tab" id="tab-sent" aria-selected="false" aria-controls="panel-sent" data-tab="sent">Sent</button>
-<button type="button" role="tab" id="tab-queue" aria-selected="false" aria-controls="panel-queue" data-tab="queue" hidden>Approvals <i id="cnt-queue">0</i></button>
+<button type="button" role="tab" id="tab-queue" aria-selected="false" aria-controls="panel-queue" data-tab="queue" hidden><span id="queue-label">Approvals</span> <i id="cnt-queue">0</i></button>
+<button type="button" role="tab" id="tab-chit-history" aria-selected="false" aria-controls="panel-chit-history" data-tab="chit-history" hidden>Chit history</button>
 </div>
 <div class="ec-panel" id="panel-inbox" role="tabpanel" aria-labelledby="tab-inbox" tabindex="0" data-panel="inbox"></div>
 <div class="ec-panel" id="panel-sent" role="tabpanel" aria-labelledby="tab-sent" tabindex="0" data-panel="sent" hidden></div>
 <div class="ec-panel" id="panel-queue" role="tabpanel" aria-labelledby="tab-queue" tabindex="0" data-panel="queue" hidden></div>
+<div class="ec-panel" id="panel-chit-history" role="tabpanel" aria-labelledby="tab-chit-history" tabindex="0" data-panel="chit-history" hidden>
+<div class="chit-history-toolbar">
+<label for="chit-history-delegate">Delegate</label>
+<select id="chit-history-delegate"><option value="">Choose a delegate</option></select>
+</div>
+<div id="chit-history-messages"><p class="empty">Select a delegate to view their chit history.</p></div>
+</div>
 <div class="ec-panel" id="panel-compose" role="tabpanel" aria-labelledby="tab-compose" tabindex="0" data-panel="compose" hidden>
 <form id="compose-form" class="compose">
 <input id="reply-to-id" type="hidden">
-<label>Type<select id="kind"></select></label>
+<fieldset class="choice-field">
+<legend>Type</legend>
+<div class="choice-capsule" id="kind-options">
+<label><input type="radio" name="kind" value="chit" checked><span>Chit</span></label>
+<label><input type="radio" name="kind" value="directive"><span>Directive</span></label>
+<label><input type="radio" name="kind" value="resolution"><span>Resolution</span></label>
+</div>
+</fieldset>
+<fieldset class="choice-field" id="chit-options" hidden>
+<legend>Chit type</legend>
+<div class="choice-capsule">
+<label><input type="radio" name="chit_type" value="poi"><span>POI</span></label>
+<label><input type="radio" name="chit_type" value="other" checked><span>Other</span></label>
+</div>
+</fieldset>
+<dialog class="directive-dialog" id="directive-dialog" aria-labelledby="directive-dialog-title">
+<h3 id="directive-dialog-title">Choose directive visibility</h3>
+<p>Should this directive be private or public?</p>
+<fieldset class="choice-field" id="directive-options">
+<legend>Visibility</legend>
+<div class="choice-capsule">
+<label><input type="radio" name="visibility" value="private" checked><span>Private</span></label>
+<label><input type="radio" name="visibility" value="public"><span>Public</span></label>
+</div>
+</fieldset>
+<button class="btn ghost sm" id="directive-cancel" type="button">Cancel</button>
+</dialog>
 <label id="to-wrap">To<select id="to"></select></label>
+<div id="resolution-attachment" hidden>
+<label>Google Docs or Drive URL<input id="resolution-url" type="url" maxlength="2048" placeholder="https://docs.google.com/..."></label>
+<p>Or attach a PDF, DOC, DOCX, ODT, or TXT document (maximum 3 MB).</p>
+<label>Document<input id="resolution-file" type="file" accept=".pdf,.doc,.docx,.odt,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,text/plain"></label>
+</div>
 <label>Subject<input id="subject" maxlength="120" required></label>
 <label>Message<textarea id="body" rows="6" maxlength="2000" required></textarea></label>
 <p id="kind-hint"></p>
@@ -238,6 +282,7 @@
 <h3 class="disp">Quick reset</h3>
 <p>Take a moment between sessions.</p>
 <p class="wellness-status" id="wellness-status" role="status" aria-live="polite">0 of 3 checked today.</p>
+<p class="wellness-celebration" id="wellness-celebration" hidden><span aria-hidden="true">✦</span> All done — take that good energy with you!</p>
 </div>
 <fieldset class="wellness-list" aria-label="Daily wellness check-in">
 <label class="wellness-item"><input type="checkbox" data-wellness="water"><span>Water</span></label>

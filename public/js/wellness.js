@@ -1,18 +1,31 @@
 (function () {
   var checks = [].slice.call(document.querySelectorAll('[data-wellness]'));
   var status = document.getElementById('wellness-status');
+  var celebration = document.getElementById('wellness-celebration');
   var note = document.getElementById('wellness-note');
+  var previouslyComplete = false;
   var storageKey = 'dxb-mun-wellness-checkin';
   var todayDate = new Date();
   var today = todayDate.getFullYear() + '-' +
     ('0' + (todayDate.getMonth() + 1)).slice(-2) + '-' +
     ('0' + todayDate.getDate()).slice(-2);
-  function update() {
+  function update(celebrate) {
     var completed = checks.filter(function (check) { return check.checked; }).length;
     checks.forEach(function (check) {
       check.closest('.wellness-item').classList.toggle('is-checked', check.checked);
     });
     status.textContent = completed + ' of ' + checks.length + ' checked today.';
+    var allComplete = checks.length > 0 && completed === checks.length;
+    celebration.hidden = !allComplete;
+    previouslyComplete = allComplete;
+    if (celebrate && allComplete) {
+      celebration.classList.remove('is-celebrating');
+      window.requestAnimationFrame(function () {
+        celebration.classList.add('is-celebrating');
+      });
+    } else if (!allComplete) {
+      celebration.classList.remove('is-celebrating');
+    }
   }
 
   try {
@@ -33,7 +46,8 @@
 
   checks.forEach(function (check) {
     check.addEventListener('change', function () {
-      update();
+      var isComplete = checks.length > 0 && checks.every(function (item) { return item.checked; });
+      update(!previouslyComplete && isComplete);
       try {
         localStorage.setItem(storageKey, JSON.stringify({
           date: today,

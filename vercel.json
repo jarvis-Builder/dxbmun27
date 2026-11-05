@@ -2,11 +2,26 @@
   "version": 2,
   "builds": [
     {
+      "src": "public/**",
+      "use": "@vercel/static"
+    },
+    {
       "src": "app.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(css|js|images)/(.*)",
+      "dest": "/public/$1/$2"
+    },
+    {
+      "src": "/timer\\.html",
+      "dest": "/public/timer.html"
+    },
     {
       "src": "/(.*)",
       "dest": "app.py"

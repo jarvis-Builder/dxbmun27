@@ -1,15 +1,7 @@
 code,name,committee,country
 DEL12345,John Smith,UNSC,France
-CHR12345,Chair (You),UNSC,
-ADN12345,Ramu Bhaiya,,
-DEL48213,Aisha Khan,UNSC,Russia
+CHR12345,Vihaan Khasnis (Chair),UNSC
+ADN12345,Ramu Bhaiya
 DEL90571,Liam Chen,UNSC,China
-DEL27364,Sara Ahmed,UNSC,UAE
-DEL63908,Noah Patel,WHO,India
-DEL15742,Mia Rossi,WHO,Italy
-DEL84026,Omar Hassan,WHO,Egypt
-DEL39157,Emma Clarke,WHO,UK
-DEL70483,Yuki Tanaka,UNSC,Japan
-DEL52619,Zara Malik,UNSC,Pakistan
-DEL06891,Lucas Silva,WHO,Brazil
-CHR40817,WHO Chair,WHO,
+DEL27543,Aayan Patra,UNSC,Afghanistan
+DEL06891, Ramesh Sharma,UNSC,USA

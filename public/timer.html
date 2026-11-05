@@ -26,8 +26,30 @@
 </div>
 <div class="timer-shell timer-single">
 <div class="timer-clock">
-<p class="timer-kicker disp">General speakers list</p>
-<p class="timer-wheel-instruction">Scroll, swipe, or use arrow keys to set the duration.</p>
+<p class="timer-kicker disp">Committee speaking session</p>
+<p class="timer-wheel-instruction">The chair chooses a speaking format, then sets one common time for every delegate.</p>
+<div class="timer-session-control" id="timer-session-control">
+<p class="timer-session-label">Timer</p>
+<button class="btn ghost sm" id="general-timer-setup" type="button">Set up timer</button>
+<div class="general-timer-controls" id="general-timer-controls" hidden>
+<button class="btn sm" id="general-timer-pause" type="button">Pause</button>
+<button class="btn sm" id="general-timer-resume" type="button" hidden>Resume</button>
+<button class="btn ghost sm" id="general-timer-reset" type="button">Reset</button>
+</div>
+<p class="general-timer-status" id="general-timer-status" role="status" aria-live="polite">No timer is active.</p>
+<hr class="timer-session-divider">
+<p class="timer-session-label">1 · Choose a speaking format</p>
+<div class="timer-session-actions" role="group" aria-label="Choose speaking format">
+<button class="btn" type="button" data-session-mode="gsl">Start GSL</button>
+<button class="btn" type="button" data-session-mode="moderated_caucus">Start moderated caucus</button>
+<button class="btn" type="button" data-session-mode="round_table">Start round table conference</button>
+</div>
+<p class="timer-chair-hint" id="timer-chair-hint"><span id="timer-chair-hint-text">Chair sign-in is required to start a speaking format.</span> <a href="#speaker-auth">Go to chair sign-in</a>.</p>
+<p class="timer-session-status" id="timer-session-status" role="status" aria-live="polite">No speaking format is active.</p>
+<button class="btn ghost sm" id="timer-session-end" type="button" hidden>End speaking format</button>
+</div>
+<div class="timer-duration-picker" id="timer-duration-picker" hidden>
+<p class="timer-session-label" id="timer-duration-label">2 · Set the common speaking time</p>
 <div class="timer-presets" role="group" aria-label="Common speaking time presets">
 <button class="timer-preset" type="button" data-duration="30" aria-pressed="false">0:30</button>
 <button class="timer-preset is-active" type="button" data-duration="60" aria-pressed="true">1:00</button>
@@ -46,14 +68,51 @@
 <div class="timer-wheel" id="timer-seconds" role="listbox" aria-labelledby="seconds-label" aria-label="Seconds" aria-disabled="false" aria-activedescendant="timer-seconds-option-0" tabindex="0"><div class="timer-wheel-in"></div></div>
 </div>
 </div>
-<p class="timer-remaining" id="timer-remaining">Time remaining: 01:00</p>
-<p class="timer-state" id="timer-state" role="status" aria-live="polite">Ready when you are.</p>
-<div class="timer-actions">
-<button class="btn" id="timer-start" type="button">Start</button>
-<button class="btn ghost" id="timer-reset" type="button">Reset</button>
+<div class="timer-session-confirm">
+<button class="btn" id="timer-session-confirm" type="button">Start format with this time</button>
+<button class="btn ghost sm" id="timer-session-cancel" type="button">Cancel</button>
 </div>
 </div>
+<section class="general-timer-display" aria-label="Timer">
+<span class="general-timer-caption disp">Timer</span>
+<strong id="general-timer-clock">--:--</strong>
+<span id="general-timer-state">No timer running</span>
+</section>
+<p class="speaker-announcement" id="speaker-announcement" aria-live="off" hidden></p>
+<p class="timer-remaining" id="timer-remaining" aria-live="off">No active speaker timer.</p>
+<p class="timer-state" id="timer-state" role="status" aria-live="polite">Loading speaking list…</p>
 </div>
+</div>
+<section class="speaker-panel" aria-label="Speaking order">
+<div class="speaker-toolbar">
+<label for="speaker-committee">Committee</label>
+<select id="speaker-committee"></select>
+</div>
+<ol class="speaker-list" id="speaker-list" aria-label="Ordered speakers"></ol>
+<p class="speaker-empty" id="speaker-empty" hidden>No speakers are on this list yet.</p>
+<section class="speaker-editor" id="speaker-editor" hidden>
+<h2 class="disp">Edit speaking order</h2>
+<form id="speaker-add-form">
+<label class="sr-only" for="speaker-add-select">Delegate to add</label>
+<select id="speaker-add-select" required></select>
+<button class="btn sm" type="submit">Add delegate</button>
+</form>
+</section>
+<section class="speaker-auth" id="speaker-auth">
+<form id="speaker-login-form">
+<label for="speaker-access-code">Delegate or chair access code</label>
+<div class="speaker-login-row">
+<input id="speaker-access-code" type="password" inputmode="text" autocomplete="current-password" maxlength="8" required>
+<button class="btn ghost sm" type="submit">Sign in</button>
+</div>
+</form>
+<div class="speaker-session" id="speaker-session" hidden>
+<span id="speaker-user"></span>
+<button class="btn ghost sm" id="speaker-logout" type="button">Sign out</button>
+</div>
+<p class="speaker-message" id="speaker-message" role="status" aria-live="polite"></p>
+</section>
+</section>
 </div>
 </section>
 </main>

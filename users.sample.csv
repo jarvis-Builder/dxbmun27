@@ -1,7 +1,7 @@
 code,name,committee,country
 DEL12345,John Smith,UNSC,France
 CHR12345,Michael Smith (Co-Chair),UNSC
-ADN12345,Ramu Bhaiya
+ADN12345,Ramu Bhaiya,UNSC,Admin
 DEL55555,Liam Chen,UNSC,China
 DEL44444,Aayan Patra,UNSC,Afghanistan
 DEL33333,Ramesh Sharma,UNSC,USA
@@ -12,4 +12,4 @@ DEL92641,Lucas Moreau,UNHRC,France
 DEL31487,Mei Tanaka,UNHRC,Japan
 DEL65092,Samira Haddad,UNHRC,Jordan
 DEL48315,Diego Alvarez,UNHRC,Mexico
-CHR59724,David Smith (Head Chair),UNHRC,
+CHR59724,David Smith (Head Chair),UNHRC

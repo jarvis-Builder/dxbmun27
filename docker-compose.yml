@@ -1,0 +1,41 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    build: .
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_PATH: /app/data/echits.sqlite3
+      REDIS_URL: redis://redis:6379/0
+      REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-2048}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-0}
+      USERS_FILE: /app/users.csv
+    ports:
+      - "8000:8000"
+    volumes:
+      - echits-data:/app/data
+      - ${USERS_FILE:-./users.sample.csv}:/app/users.csv:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
+    restart: unless-stopped
+
+volumes:
+  echits-data:
+  redis-data:

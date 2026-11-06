@@ -1,1325 +1,513 @@
+from __future__ import annotations
+
+import asyncio
 import csv
-import io
+import hmac
+import logging
 import os
-import re
 import secrets
 import sqlite3
-import threading
 import time
-import zipfile
-from urllib.parse import urlsplit
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI
-from fastapi.middleware.wsgi import WSGIMiddleware
-from flask import Flask, g, jsonify, render_template, request, send_file, session
-from werkzeug.exceptions import RequestEntityTooLarge
+import msgspec
+from litestar import Litestar, Request, WebSocket, get, post
+from litestar.exceptions import NotAuthorizedException
+from litestar.handlers import WebsocketListener
+from litestar.response import Response
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-IS_VERCEL = os.environ.get("VERCEL") == "1"
-DATABASE_URL = os.environ.get("DATABASE_URL")
-MAX_UPLOAD_BYTES = 3 * 1024 * 1024
-flask_app = Flask(
-    __name__,
-    static_folder=None if IS_VERCEL else os.path.join(BASE, "public"),
-    static_url_path="" if not IS_VERCEL else None,
-)
-LOCAL_RUN = __name__ == "__main__"
-DEBUG_MODE = os.environ.get("FLASK_DEBUG") == "1"
-LOCAL_MODE = LOCAL_RUN or DEBUG_MODE
-secret_key = os.environ.get("SECRET_KEY")
-vercel_configuration = (secret_key, DATABASE_URL, os.environ.get("USERS_CSV"))
-VERCEL_DEMO_MODE = IS_VERCEL and not any(vercel_configuration)
-if secret_key:
-    session_secret_key = secret_key
-elif VERCEL_DEMO_MODE:
-    session_secret_key = "echits-public-vercel-demo-key-not-for-real-data"
-elif IS_VERCEL:
-    session_secret_key = secrets.token_hex(32)
-else:
-    session_secret_key = "dev-only-change-me"
-if not secret_key and not LOCAL_MODE and not IS_VERCEL:
-    raise RuntimeError("Set SECRET_KEY before starting the application outside local debug mode")
-flask_app.secret_key = session_secret_key
-flask_app.config.update(
-    MAX_CONTENT_LENGTH=MAX_UPLOAD_BYTES + 64 * 1024,
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=IS_VERCEL or os.environ.get("SESSION_COOKIE_SECURE") == "1",
-    SESSION_PERMANENT=False,
-)
-
-app = FastAPI(title="E-Chits")
-app.mount("/", WSGIMiddleware(flask_app))
-
-DB_PATH = os.environ.get(
-    "DB_PATH",
-    "/tmp/echits-demo.db" if VERCEL_DEMO_MODE else os.path.join(BASE, "echits.db"),
-)
-CODE_RE = re.compile(r"^(DEL|CHR|ADN)\d{5}$")
-ROLES = {"DEL": "delegate", "CHR": "chair", "ADN": "admin"}
-FAILS = {}  # ip -> list of failed login times
-DB_INITIALIZED = False
-DB_INIT_LOCK = threading.Lock()
-DB_POOL = None
-DB_POOL_LOCK = threading.Lock()
+logger = logging.getLogger("echits")
+COOKIE_NAME = "echits_session"
+SESSION_TTL_SECONDS = 60 * 60 * 12
+MAX_MESSAGE_LENGTH = 2_000
+REGISTER_TIMEOUT_SECONDS = 5
 
 
-class EChitsConfigurationError(Exception):
-    pass
+class LoginRequest(msgspec.Struct):
+    access_code: str
 
 
-@flask_app.before_request
-def require_echits_configuration():
-    if not IS_VERCEL or VERCEL_DEMO_MODE or not request.path.startswith("/api/"):
-        return None
-    missing = [
-        name for name, value in (
-            ("SECRET_KEY", secret_key),
-            ("DATABASE_URL", DATABASE_URL),
-            ("USERS_CSV", os.environ.get("USERS_CSV")),
-        ) if not value
-    ]
-    if missing:
-        return jsonify(error="E-Chits is not configured. Set these Vercel environment variables: "
-                             + ", ".join(missing)), 503
-    return None
+class ClientMessage(msgspec.Struct, kw_only=True):
+    action: str
+    delegate_id: str | None = None
+    receiver: str | None = None
+    message: str | None = None
 
 
-@flask_app.context_processor
-def inject_echits_demo_mode():
-    return {"echits_demo_mode": VERCEL_DEMO_MODE}
+def _database_path() -> Path:
+    return Path(os.getenv("DATABASE_PATH", "data/echits.sqlite3"))
 
 
-@flask_app.errorhandler(EChitsConfigurationError)
-def handle_echits_configuration_error(error):
-    flask_app.logger.error("E-Chits configuration error: %s", error)
-    return jsonify(error=str(error)), 503
+def _connect_database() -> sqlite3.Connection:
+    path = _database_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path, timeout=30)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA busy_timeout = 30000")
+    connection.execute("PRAGMA foreign_keys = ON")
+    return connection
 
 
-@flask_app.errorhandler(RequestEntityTooLarge)
-def handle_request_entity_too_large(_error):
-    return jsonify(error="The uploaded document is too large (maximum 3 MB)."), 413
+def _load_users() -> list[dict[str, str]]:
+    configured_file = os.getenv("USERS_FILE")
+    if configured_file:
+        csv_path = Path(configured_file)
+    elif os.getenv("APP_ENV", "development") == "production":
+        raise RuntimeError("USERS_FILE must be set in production")
+    else:
+        csv_path = Path("users.sample.csv")
 
+    if not csv_path.is_file():
+        raise FileNotFoundError(f"Users CSV file not found: {csv_path}")
 
-# ---------- database ----------
-def connect_db():
-    if DATABASE_URL:
-        import psycopg
-        from psycopg.rows import dict_row
-
-        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
-    return sqlite3.connect(DB_PATH, timeout=30)
-
-
-def get_db_pool():
-    global DB_POOL
-    if DB_POOL is None:
-        with DB_POOL_LOCK:
-            if DB_POOL is None:
-                from psycopg_pool import ConnectionPool
-                from psycopg.rows import dict_row
-
-                try:
-                    max_size = int(os.environ.get("DB_POOL_MAX_SIZE", "5"))
-                except ValueError as error:
-                    raise EChitsConfigurationError(
-                        "DB_POOL_MAX_SIZE must be an integer between 1 and 20"
-                    ) from error
-                if not 1 <= max_size <= 20:
-                    raise EChitsConfigurationError(
-                        "DB_POOL_MAX_SIZE must be an integer between 1 and 20"
-                    )
-                DB_POOL = ConnectionPool(
-                    conninfo=DATABASE_URL,
-                    min_size=0,
-                    max_size=max_size,
-                    timeout=10,
-                    max_idle=30,
-                    max_lifetime=300,
-                    kwargs={"row_factory": dict_row},
-                    open=False,
-                )
-                DB_POOL.open()
-    return DB_POOL
-
-
-def db_execute(db, sql, args=()):
-    if DATABASE_URL:
-        sql = sql.replace("?", "%s")
-    return db.execute(sql, args)
-
-
-def db_executemany(db, sql, args):
-    if DATABASE_URL:
-        sql = sql.replace("?", "%s")
-    return db.executemany(sql, args)
-
-
-def get_db():
-    if "db" not in g:
-        init_db()
-        if DATABASE_URL:
-            g.db = get_db_pool().getconn()
-        else:
-            g.db = connect_db()
-            g.db.row_factory = sqlite3.Row
-    return g.db
-
-
-@flask_app.teardown_appcontext
-def close_db(_exc):
-    db = g.pop("db", None)
-    if db:
-        if DATABASE_URL:
-            get_db_pool().putconn(db)
-        else:
-            db.close()
-
-
-def load_users():
-    csv_contents = os.environ.get("USERS_CSV")
-    if csv_contents is not None:
-        reader = csv.DictReader(io.StringIO(csv_contents))
-        return parse_users(reader)
-
-    candidates = (
-        os.environ.get("USERS_FILE"),
-        "/etc/secrets/users.csv",           # Render "Secret File" (your real list)
-        os.path.join(BASE, "users.csv"),    # local real list (never uploaded to GitHub)
-    )
-    if LOCAL_MODE or VERCEL_DEMO_MODE:
-        candidates += (os.path.join(BASE, "users.sample.csv"),)
-    for path in candidates:
-        if path and os.path.exists(path):
-            with open(path, newline="", encoding="utf-8-sig") as f:
-                return parse_users(csv.DictReader(f))
-    raise FileNotFoundError("No users.csv or users.sample.csv found")
-
-
-def parse_users(reader):
-    required_columns = {"code", "name", "committee", "country"}
-    if not reader.fieldnames or not required_columns.issubset(reader.fieldnames):
-        raise ValueError("users.csv must contain code,name,committee,country columns")
-    users = []
-    for row in reader:
-        code = re.sub(r"\s+", "", row.get("code") or "").upper()
-        if not CODE_RE.match(code):
-            continue
-        users.append((
-            code, (row.get("name") or "").strip(), ROLES[code[:3]],
-            (row.get("committee") or "").strip().upper(),
-            (row.get("country") or "").strip(),
-        ))
+    users: list[dict[str, str]] = []
+    with csv_path.open(newline="", encoding="utf-8-sig") as file:
+        for row in csv.DictReader(file):
+            normalized = {str(key or "").strip().lower(): str(value or "").strip() for key, value in row.items()}
+            code = normalized.get("code") or normalized.get("access_code") or normalized.get("delegate_id")
+            if not code:
+                continue
+            code = code.upper()
+            prefix_role = {"DEL": "delegate", "CHR": "chair", "ADN": "admin"}
+            users.append(
+                {
+                    "code": code,
+                    "name": normalized.get("name") or normalized.get("delegate") or code,
+                    "committee": normalized.get("committee", ""),
+                    "country": normalized.get("country", ""),
+                    "role": (normalized.get("role") or prefix_role.get(code[:3], "delegate")).lower(),
+                }
+            )
     if not users:
-        raise ValueError("users.csv does not contain any valid access codes")
+        raise RuntimeError(f"No valid users were found in {csv_path}")
     return users
 
 
-def init_db():
-    global DB_INITIALIZED
-    if DB_INITIALIZED:
-        return
-    with DB_INIT_LOCK:
-        if DB_INITIALIZED:
-            return
-        _init_db()
-        DB_INITIALIZED = True
-
-
-def _init_db():
-    users = load_users()
-    con = connect_db()
-    if not DATABASE_URL:
-        con.row_factory = sqlite3.Row
-    try:
-        if not DATABASE_URL:
-            db_execute(con, "PRAGMA journal_mode=WAL")
-            db_execute(con, "PRAGMA busy_timeout=30000")
-        else:
-            db_execute(con, "SELECT pg_advisory_xact_lock(27027)")
-        if DATABASE_URL:
-            db_execute(
-                con,
-                """
-                CREATE TABLE IF NOT EXISTS users(
-                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                    code TEXT UNIQUE NOT NULL, name TEXT, role TEXT, committee TEXT, country TEXT
-                )
-                """,
-            )
-            db_execute(
-                con,
-                """
-                CREATE TABLE IF NOT EXISTS messages(
-                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                    sender TEXT, recipient TEXT, committee TEXT, kind TEXT, subject TEXT, body TEXT,
-                    status TEXT, note TEXT, created BIGINT, delivered_at BIGINT,
-                    subtype TEXT NOT NULL DEFAULT 'other',
-                    visibility TEXT NOT NULL DEFAULT 'private',
-                    document_url TEXT,
-                    attachment_name TEXT,
-                    attachment_mime TEXT,
-                    attachment_data BYTEA
-                )
-                """,
-            )
-            db_execute(
-                con,
-                """
-                CREATE TABLE IF NOT EXISTS committee_speakers(
-                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                    committee TEXT NOT NULL, user_code TEXT NOT NULL, position INTEGER NOT NULL,
-                    duration INTEGER NOT NULL DEFAULT 60,
-                    UNIQUE(committee, user_code)
-                )
-                """,
-            )
-            db_execute(
-                con,
-                "ALTER TABLE committee_speakers ADD COLUMN IF NOT EXISTS "
-                "duration INTEGER NOT NULL DEFAULT 60",
-            )
-            db_execute(
-                con,
-                """
-                CREATE TABLE IF NOT EXISTS committee_timer(
-                    committee TEXT PRIMARY KEY, user_code TEXT NOT NULL,
-                    started_at BIGINT NOT NULL, duration INTEGER NOT NULL
-                )
-                """,
-            )
-            db_execute(
-                con,
-                """
-                CREATE TABLE IF NOT EXISTS committee_session(
-                    committee TEXT PRIMARY KEY, mode TEXT NOT NULL, duration INTEGER NOT NULL,
-                    started_at BIGINT NOT NULL, total_duration INTEGER
-                )
-                """,
-            )
-            db_execute(
-                con, "ALTER TABLE committee_session ADD COLUMN IF NOT EXISTS total_duration INTEGER"
-            )
-            db_execute(
-                con,
-                """
-                CREATE TABLE IF NOT EXISTS committee_general_timer(
-                    committee TEXT PRIMARY KEY, duration INTEGER NOT NULL, started_at BIGINT NOT NULL,
-                    remaining INTEGER NOT NULL, running BOOLEAN NOT NULL
-                )
-                """,
-            )
-            db_execute(
-                con,
-                """
-                CREATE TABLE IF NOT EXISTS app_migrations(
-                    migration TEXT PRIMARY KEY, applied_at BIGINT NOT NULL
-                )
-                """,
-            )
-            db_execute(con, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at BIGINT")
-            db_execute(
-                con, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS "
-                "subtype TEXT NOT NULL DEFAULT 'other'"
-            )
-            db_execute(
-                con, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS "
-                "visibility TEXT NOT NULL DEFAULT 'private'"
-            )
-            db_execute(con, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS document_url TEXT")
-            db_execute(con, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT")
-            db_execute(con, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_mime TEXT")
-            db_execute(con, "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_data BYTEA")
-        else:
-            con.executescript(
-                """
-            CREATE TABLE IF NOT EXISTS users(
-                code TEXT PRIMARY KEY, name TEXT, role TEXT, committee TEXT, country TEXT);
-            CREATE TABLE IF NOT EXISTS messages(
-                id INTEGER PRIMARY KEY AUTOINCREMENT, sender TEXT, recipient TEXT,
-                committee TEXT, kind TEXT, subject TEXT, body TEXT,
-                status TEXT, note TEXT, created INTEGER, delivered_at INTEGER,
-                subtype TEXT NOT NULL DEFAULT 'other',
-                visibility TEXT NOT NULL DEFAULT 'private',
-                document_url TEXT,
-                attachment_name TEXT,
-                attachment_mime TEXT,
-                attachment_data BLOB);
-            CREATE TABLE IF NOT EXISTS committee_speakers(
-                id INTEGER PRIMARY KEY AUTOINCREMENT, committee TEXT NOT NULL,
-                user_code TEXT NOT NULL, position INTEGER NOT NULL, duration INTEGER NOT NULL DEFAULT 60,
-                UNIQUE(committee, user_code));
-            CREATE TABLE IF NOT EXISTS committee_timer(
-                committee TEXT PRIMARY KEY, user_code TEXT NOT NULL,
-                started_at INTEGER NOT NULL, duration INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS committee_session(
-                committee TEXT PRIMARY KEY, mode TEXT NOT NULL, duration INTEGER NOT NULL,
-                started_at INTEGER NOT NULL, total_duration INTEGER);
-            CREATE TABLE IF NOT EXISTS committee_general_timer(
-                committee TEXT PRIMARY KEY, duration INTEGER NOT NULL, started_at INTEGER NOT NULL,
-                remaining INTEGER NOT NULL, running INTEGER NOT NULL);
-            CREATE TABLE IF NOT EXISTS app_migrations(
-                migration TEXT PRIMARY KEY, applied_at INTEGER NOT NULL);
+def _initialize_database(users: list[dict[str, str]]) -> None:
+    with _connect_database() as connection:
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS users (
+                code TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                committee TEXT NOT NULL DEFAULT '',
+                country TEXT NOT NULL DEFAULT '',
+                role TEXT NOT NULL DEFAULT 'delegate'
             )
-            message_columns = {
-                column["name"] for column in con.execute("PRAGMA table_info(messages)").fetchall()
-            }
-            if "delivered_at" not in message_columns:
-                con.execute("ALTER TABLE messages ADD COLUMN delivered_at INTEGER")
-            if "subtype" not in message_columns:
-                con.execute(
-                    "ALTER TABLE messages ADD COLUMN subtype TEXT NOT NULL DEFAULT 'other'"
-                )
-            if "visibility" not in message_columns:
-                con.execute(
-                    "ALTER TABLE messages ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'"
-                )
-            for column, column_type in (
-                ("document_url", "TEXT"),
-                ("attachment_name", "TEXT"),
-                ("attachment_mime", "TEXT"),
-                ("attachment_data", "BLOB"),
-            ):
-                if column not in message_columns:
-                    con.execute(f"ALTER TABLE messages ADD COLUMN {column} {column_type}")
-            speaker_columns = {
-                column["name"] for column in con.execute("PRAGMA table_info(committee_speakers)").fetchall()
-            }
-            if "duration" not in speaker_columns:
-                con.execute(
-                    "ALTER TABLE committee_speakers ADD COLUMN duration INTEGER NOT NULL DEFAULT 60"
-                )
-            session_columns = {
-                column["name"] for column in con.execute("PRAGMA table_info(committee_session)").fetchall()
-            }
-            if "total_duration" not in session_columns:
-                con.execute("ALTER TABLE committee_session ADD COLUMN total_duration INTEGER")
-        db_execute(con, "DROP TABLE IF EXISTS committee_vote_ballots")
-        db_execute(con, "DROP TABLE IF EXISTS committee_votes")
-        poi_history_migration = "delete_poi_chit_history_20261105"
-        migration_applied = db_execute(
-            con, "SELECT 1 FROM app_migrations WHERE migration=?", (poi_history_migration,)
-        ).fetchone()
-        if not migration_applied:
-            db_execute(con, "DELETE FROM messages WHERE kind='chit' AND subtype='poi'")
-            db_execute(
-                con, "INSERT INTO app_migrations(migration,applied_at) VALUES(?,?)",
-                (poi_history_migration, int(time.time())),
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender TEXT NOT NULL,
+                recipient TEXT NOT NULL,
+                committee TEXT NOT NULL DEFAULT '',
+                kind TEXT NOT NULL DEFAULT 'chit',
+                subject TEXT NOT NULL DEFAULT 'E-Chit',
+                body TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'delivered',
+                note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                delivered_at TEXT NOT NULL,
+                subtype TEXT NOT NULL DEFAULT 'other'
             )
-        db_execute(con, "DROP INDEX IF EXISTS messages_chit_expiry")
-        db_execute(
-            con,
-            "CREATE INDEX IF NOT EXISTS messages_chit_history_sender "
-            "ON messages(committee,kind,sender)",
+            """
         )
-        db_execute(
-            con,
-            "CREATE INDEX IF NOT EXISTS messages_chit_history_recipient "
-            "ON messages(committee,kind,recipient)",
-        )
-        db_execute(
-            con, "CREATE INDEX IF NOT EXISTS messages_sender_recent ON messages(sender,id)"
-        )
-        db_execute(
-            con,
-            "CREATE INDEX IF NOT EXISTS messages_recipient_recent "
-            "ON messages(recipient,status,id)",
-        )
-        db_execute(
-            con,
-            "CREATE INDEX IF NOT EXISTS messages_public_directives "
-            "ON messages(kind,visibility,status,id)",
-        )
-        db_execute(
-            con,
-            "UPDATE messages SET delivered_at=created WHERE kind='chit' "
-            "AND status IN ('delivered','approved') AND delivered_at IS NULL",
-        )
-        incoming_codes = {user[0] for user in users}
-        for existing in db_execute(con, "SELECT code FROM users").fetchall():
-            if existing["code"] not in incoming_codes:
-                db_execute(con, "DELETE FROM users WHERE code=?", (existing["code"],))
-        db_executemany(
-            con,
-            "INSERT INTO users(code,name,role,committee,country) VALUES (?,?,?,?,?) "
-            "ON CONFLICT(code) DO UPDATE SET name=excluded.name, role=excluded.role, "
-            "committee=excluded.committee, country=excluded.country",
+        existing_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(messages)").fetchall()
+        }
+        user_columns = {row["name"] for row in connection.execute("PRAGMA table_info(users)").fetchall()}
+        if "country" not in user_columns:
+            connection.execute("ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT ''")
+        migrations = {
+            "committee": "TEXT NOT NULL DEFAULT ''",
+            "kind": "TEXT NOT NULL DEFAULT 'chit'",
+            "subject": "TEXT NOT NULL DEFAULT 'E-Chit'",
+            "body": "TEXT NOT NULL DEFAULT ''",
+            "status": "TEXT NOT NULL DEFAULT 'delivered'",
+            "note": "TEXT NOT NULL DEFAULT ''",
+            "created_at": "TEXT NOT NULL DEFAULT ''",
+            "delivered_at": "TEXT NOT NULL DEFAULT ''",
+            "subtype": "TEXT NOT NULL DEFAULT 'other'",
+        }
+        for column, definition in migrations.items():
+            if column not in existing_columns:
+                connection.execute(f"ALTER TABLE messages ADD COLUMN {column} {definition}")
+        connection.executemany(
+            """
+            INSERT INTO users (code, name, committee, country, role)
+            VALUES (:code, :name, :committee, :country, :role)
+            ON CONFLICT(code) DO UPDATE SET
+                name = excluded.name,
+                committee = excluded.committee,
+                country = excluded.country,
+                role = excluded.role
+            """,
             users,
         )
-        con.commit()
-    finally:
-        con.close()
-
-
-# ---------- helpers ----------
-def current_user():
-    code = session.get("code")
-    if not code:
-        return None
-    return db_execute(get_db(), "SELECT * FROM users WHERE code=?", (code,)).fetchone()
-
-
-def need_login(roles=None):
-    u = current_user()
-    if not u:
-        return None, (jsonify(error="Please log in first"), 401)
-    if roles and u["role"] not in roles:
-        return None, (jsonify(error="Not allowed"), 403)
-    return u, None
-
-
-def user_dict(u):
-    return {k: u[k] for k in ("code", "name", "role", "committee", "country")}
-
-
-def rows(sql, args=()):
-    return [dict(r) for r in db_execute(get_db(), sql, args).fetchall()]
-
-
-def expire_speaker_timer(db, committee, now):
-    timer = db_execute(
-        db, "SELECT user_code, started_at, duration FROM committee_timer WHERE committee=?",
-        (committee,),
-    ).fetchone()
-    if not timer or timer["started_at"] + timer["duration"] > now:
-        return False
-
-    expired = db_execute(
-        db,
-        "DELETE FROM committee_timer WHERE committee=? AND user_code=? "
-        "AND started_at=? AND duration=?",
-        (committee, timer["user_code"], timer["started_at"], timer["duration"]),
-    )
-    if expired.rowcount != 1:
-        return False
-    db_execute(
-        db, "DELETE FROM committee_speakers WHERE committee=? AND user_code=?",
-        (committee, timer["user_code"]),
-    )
-    ordered = db_execute(
-        db, "SELECT id FROM committee_speakers WHERE committee=? ORDER BY position,id",
-        (committee,),
-    ).fetchall()
-    for position, row in enumerate(ordered, 1):
-        db_execute(
-            db, "UPDATE committee_speakers SET position=? WHERE id=? AND committee=?",
-            (position, row["id"], committee),
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS messages_recipient_created "
+            "ON messages(recipient, created_at DESC)"
         )
-    db.commit()
-    return True
 
 
-def clear_speaking_order(db, committee):
-    db_execute(db, "DELETE FROM committee_timer WHERE committee=?", (committee,))
-    db_execute(db, "DELETE FROM committee_speakers WHERE committee=?", (committee,))
-
-
-def expire_caucus_session(db, committee, now):
-    active_session = db_execute(
-        db,
-        "SELECT mode, started_at, total_duration FROM committee_session WHERE committee=?",
-        (committee,),
-    ).fetchone()
-    if (
-        not active_session
-        or active_session["mode"] not in ("moderated_caucus", "unmoderated_caucus")
-        or not active_session["total_duration"]
-        or active_session["started_at"] + active_session["total_duration"] > now
-    ):
-        return False
-
-    expired = db_execute(
-        db,
-        "DELETE FROM committee_session WHERE committee=? AND mode=? AND started_at=? "
-        "AND total_duration=?",
-        (
-            committee, active_session["mode"], active_session["started_at"],
-            active_session["total_duration"],
-        ),
-    )
-    if expired.rowcount != 1:
-        return False
-    clear_speaking_order(db, committee)
-    db.commit()
-    return True
-
-
-def client_ip():
-    return (request.headers.get("X-Forwarded-For") or request.remote_addr or "?").split(",")[0].strip()
-
-
-def validate_google_document_url(value):
-    if not isinstance(value, str):
-        raise ValueError("Enter a valid Google Docs or Drive URL")
-    value = value.strip()
-    if not value:
-        return None
-    if len(value) > 2048:
-        raise ValueError("The Google Docs or Drive URL is too long")
-    try:
-        parsed = urlsplit(value)
-        port = parsed.port
-    except ValueError:
-        raise ValueError("Enter a valid Google Docs or Drive URL") from None
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname not in ("docs.google.com", "drive.google.com")
-        or parsed.username is not None
-        or parsed.password is not None
-        or port not in (None, 443)
-    ):
-        raise ValueError("Use an HTTPS Google Docs or Drive URL")
-    return value
-
-
-def parse_resolution_attachment(upload):
-    if not upload or not upload.filename:
-        return None
-
-    filename = upload.filename.replace("\\", "/").rsplit("/", 1)[-1]
-    filename = re.sub(r"[\x00-\x1f\x7f]", "", filename).strip()[:150]
-    extension = os.path.splitext(filename)[1].lower()
-    mime_types = {
-        ".pdf": ("application/pdf", lambda data: data.startswith(b"%PDF-")),
-        ".doc": ("application/msword", lambda data: data.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")),
-        ".docx": (
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            lambda data: _zip_has_entries(data, {"[Content_Types].xml", "word/document.xml"}),
-        ),
-        ".odt": (
-            "application/vnd.oasis.opendocument.text",
-            lambda data: _zip_has_entries(data, {"mimetype", "content.xml"}),
-        ),
-        ".txt": ("text/plain", _is_utf8_text),
-    }
-    if extension not in mime_types:
-        raise ValueError("Attach a PDF, DOC, DOCX, ODT, or TXT document")
-
-    data = upload.stream.read(MAX_UPLOAD_BYTES + 1)
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise ValueError("The uploaded document is too large (maximum 3 MB)")
-    if not data:
-        raise ValueError("The uploaded document is empty")
-    mime_type, content_check = mime_types[extension]
-    if not content_check(data):
-        raise ValueError("The uploaded file does not match its document type")
-    return filename, mime_type, data
-
-
-def _zip_has_entries(data, required):
-    try:
-        with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            return required.issubset(archive.namelist())
-    except (OSError, zipfile.BadZipFile):
-        return False
-
-
-def _is_utf8_text(data):
-    try:
-        data.decode("utf-8-sig")
-        return True
-    except UnicodeDecodeError:
-        return False
-
-
-# Never sends anyone's access code to the browser.
-MSG_SQL = """
-SELECT m.id, m.kind, m.subject, m.body, m.status, m.note, m.created, m.committee,
-       m.subtype, m.visibility, m.document_url, m.attachment_name,
-       s.name AS sname, s.role AS srole, s.country AS scountry,
-       r.name AS rname, r.role AS rrole, r.country AS rcountry
-FROM messages m
-JOIN users s ON s.code = m.sender
-LEFT JOIN users r ON r.code = m.recipient
-"""
-
-
-# ---------- pages ----------
-@flask_app.get("/")
-def home():
-    return render_template("index.html")
-
-
-# ---------- auth ----------
-@flask_app.post("/api/login")
-def login():
-    ip = client_ip()
-    now = time.time()
-    FAILS[ip] = [t for t in FAILS.get(ip, []) if now - t < 600]
-    if len(FAILS[ip]) >= 10:
-        return jsonify(error="Too many wrong attempts. Wait 10 minutes."), 429
-
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify(error="Enter a valid access code"), 400
-    raw = data.get("code", "")
-    if not isinstance(raw, str):
-        return jsonify(error="Enter a valid access code"), 400
-    code = re.sub(r"\s+", "", raw).upper()
-    u = db_execute(get_db(), "SELECT * FROM users WHERE code=?", (code,)).fetchone()
-    if not u:
-        FAILS[ip].append(now)
-        return jsonify(error="Code not recognised. Check it and try again."), 401
-    session.clear()
-    session.permanent = False
-    session["code"] = code
-    return jsonify(user_dict(u))
-
-
-@flask_app.post("/api/logout")
-def logout():
-    session.clear()
-    return jsonify(ok=True)
-
-
-@flask_app.get("/api/me")
-def me():
-    u = current_user()
-    return jsonify(user=user_dict(u) if u else None)
-
-
-@flask_app.get("/api/directory")
-def directory():
-    u, err = need_login()
-    if err:
-        return err
-    user_id = "id" if DATABASE_URL else "rowid"
-    if u["role"] == "admin":
-        data = rows(f"SELECT {user_id} AS id, name, role, country, committee FROM users "
-                    "WHERE code != ? ORDER BY committee, role, name", (u["code"],))
-    elif u["role"] == "delegate":
-        data = rows(f"SELECT {user_id} AS id, name, role, country, committee FROM users "
-                    "WHERE committee=? AND code != ? ORDER BY role, name",
-                    (u["committee"], u["code"]))
-    else:
-        data = rows(f"SELECT {user_id} AS id, name, role, country, committee FROM users "
-                    "WHERE (committee=? OR role='admin') AND code != ? ORDER BY role, name",
-                    (u["committee"], u["code"]))
-    return jsonify(data)
-
-
-@flask_app.get("/api/speakers")
-def speakers():
-    db = get_db()
-    user_id = "id" if DATABASE_URL else "rowid"
-    committees = [row["committee"] for row in db_execute(
-        db, "SELECT DISTINCT committee FROM users WHERE role='delegate' AND committee<>'' "
-            "ORDER BY committee"
-    ).fetchall()]
-    committee = (request.args.get("committee") or "").strip().upper()
-    user = current_user()
-    if user and user["role"] == "chair":
-        if committee and committee != user["committee"]:
-            return jsonify(error="Chairs may only view their own committee's list"), 403
-        committee = user["committee"]
-    if not committee and committees:
-        committee = committees[0]
-    if committee not in committees:
-        return jsonify(error="Unknown committee"), 400
-
-    now = time.time()
-    expire_speaker_timer(db, committee, now)
-    session_finished = expire_caucus_session(db, committee, now)
-    queue = rows(
-        "SELECT s.id, s.position, s.duration, u.name, u.country FROM committee_speakers s "
-        "JOIN users u ON u.code=s.user_code "
-        "WHERE s.committee=? ORDER BY s.position, s.id",
-        (committee,),
-    )
-    can_edit = bool(user and user["role"] in ("chair", "admin"))
-    eligible = rows(
-        f"SELECT u.{user_id} AS id, u.name, u.country FROM users u "
-        "WHERE u.role='delegate' AND u.committee=? AND NOT EXISTS ("
-        "SELECT 1 FROM committee_speakers s WHERE s.committee=u.committee "
-        "AND s.user_code=u.code) ORDER BY u.name",
-        (committee,),
-    ) if can_edit else []
-    timer = db_execute(
-        db,
-        "SELECT t.user_code, u.name, u.country, t.started_at, t.duration FROM committee_timer t "
-        "JOIN users u ON u.code=t.user_code WHERE t.committee=?",
-        (committee,),
-    ).fetchone()
-    timer_data = None
-    if timer:
-        remaining = max(0, timer["duration"] - (time.time() - timer["started_at"]))
-        timer_data = {
-            "speaker": timer["name"], "country": timer["country"],
-            "started_at": timer["started_at"],
-            "duration": timer["duration"], "remaining": remaining,
+def _save_chit(sender: dict[str, str], receiver: dict[str, str], body: str, created_at: str) -> int:
+    with _connect_database() as connection:
+        columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(messages)").fetchall()
         }
-    active_session = db_execute(
-        db, "SELECT mode, duration, started_at, total_duration "
-            "FROM committee_session WHERE committee=?",
-        (committee,),
-    ).fetchone()
-    session_data = dict(active_session) if active_session else None
-    if session_data and session_data["total_duration"]:
-        session_data["total_remaining"] = max(
-            0, session_data["total_duration"] - (now - session_data["started_at"])
+        fields = ["sender", "recipient", "committee", "kind", "subject", "body", "status", "note"]
+        values: list[Any] = [
+            sender["code"],
+            receiver["code"],
+            sender["committee"],
+            "chit",
+            "E-Chit",
+            body,
+            "pending",
+            "",
+        ]
+        if "created_at" in columns:
+            fields.append("created_at")
+            values.append(created_at)
+        if "created" in columns:
+            fields.append("created")
+            values.append(int(time.time()))
+        if "delivered_at" in columns:
+            fields.append("delivered_at")
+            values.append("")
+        if "subtype" in columns:
+            fields.append("subtype")
+            values.append("other")
+        placeholders = ", ".join("?" for _ in fields)
+        cursor = connection.execute(
+            f"INSERT INTO messages ({', '.join(fields)}) VALUES ({placeholders})",
+            values,
         )
-    general_timer = db_execute(
-        db, "SELECT duration, started_at, remaining, running "
-            "FROM committee_general_timer WHERE committee=?",
-        (committee,),
-    ).fetchone()
-    general_timer_data = None
-    if general_timer:
-        running = bool(general_timer["running"])
-        remaining = max(
-            0,
-            general_timer["duration"] - (time.time() - general_timer["started_at"])
-        ) if running else general_timer["remaining"]
-        general_timer_data = {
-            "duration": general_timer["duration"],
-            "started_at": general_timer["started_at"],
-            "remaining": remaining,
-            "running": running and remaining > 0,
-        }
-    return jsonify(
-        committee=committee, committees=committees, queue=queue, eligible=eligible,
-        timer=timer_data, session=session_data, session_finished=session_finished,
-        server_now=now,
-        general_timer=general_timer_data,
-        user=user_dict(user) if user else None,
+        return int(cursor.lastrowid)
+
+
+def _is_allowed_sender(sender: dict[str, str], receiver: dict[str, str]) -> bool:
+    return (
+        sender["code"] != receiver["code"]
+        and (
+            sender["role"] == "admin"
+            or receiver["role"] == "admin"
+            or sender["committee"] == receiver["committee"]
+        )
     )
 
 
-@flask_app.post("/api/speakers")
-def edit_speakers():
-    user, err = need_login(("chair",))
-    if err:
-        return err
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify(error="Invalid speaking-list details"), 400
-    action = data.get("action")
-    committee = data.get("committee", "")
-    if not isinstance(committee, str):
-        return jsonify(error="Choose a committee"), 400
-    committee = committee.strip().upper()
-    db = get_db()
-    exists = db_execute(
-        db, "SELECT 1 FROM users WHERE role='delegate' AND committee=? LIMIT 1", (committee,)
-    ).fetchone()
-    if not exists:
-        return jsonify(error="Unknown committee"), 400
-    if committee != user["committee"]:
-        return jsonify(error="Chairs may only edit their own committee's list"), 403
+async def _send_socket_json(socket: WebSocket, payload: dict[str, Any]) -> None:
+    lock: asyncio.Lock = socket.scope["state"].setdefault("send_lock", asyncio.Lock())
+    async with lock:
+        await socket.send_text(msgspec.json.encode(payload).decode("utf-8"))
 
-    active_session = db_execute(
-        db, "SELECT mode, duration FROM committee_session WHERE committee=?", (committee,)
-    ).fetchone()
-    if action in ("add", "add_all"):
-        if not active_session:
-            return jsonify(error="Start a GSL before adding delegates to the list."), 409
-        if active_session["mode"] != "gsl":
-            return jsonify(error="The speaking list is only available during a GSL."), 409
 
-    if action == "add_all":
-        delegates = db_execute(
-            db, "SELECT code FROM users WHERE role='delegate' AND committee=?",
-            (committee,),
-        ).fetchall()
-        secrets.SystemRandom().shuffle(delegates)
-        duration = active_session["duration"]
-        db_execute(db, "DELETE FROM committee_speakers WHERE committee=?", (committee,))
-        db_executemany(
-            db, "INSERT INTO committee_speakers(committee,user_code,position,duration) "
-                "VALUES(?,?,?,?)",
-            [
-                (committee, delegate["code"], position, duration)
-                for position, delegate in enumerate(delegates, 1)
-            ],
-        )
-        db.commit()
-        return jsonify(ok=True, added=len(delegates))
-    if action == "add":
+async def _listen_for_chits(
+    socket: WebSocket,
+    delegate_id: str,
+    redis: Redis,
+    subscribed: asyncio.Event,
+) -> None:
+    delay = 0.25
+    while True:
         try:
-            delegate_id = int(data.get("delegate_id"))
-        except (TypeError, ValueError):
-            return jsonify(error="Choose a delegate"), 400
-        user_id = "id" if DATABASE_URL else "rowid"
-        delegate = db_execute(
-            db, f"SELECT code FROM users WHERE {user_id}=? AND role='delegate' AND committee=?",
-            (delegate_id, committee),
-        ).fetchone()
-        if not delegate:
-            return jsonify(error="That delegate is not in this committee"), 400
-        already_listed = db_execute(
-            db, "SELECT 1 FROM committee_speakers WHERE committee=? AND user_code=?",
-            (committee, delegate["code"]),
-        ).fetchone()
-        if already_listed:
-            return jsonify(error="That delegate is already on the speaking list"), 409
-        position = db_execute(
-            db, "SELECT COALESCE(MAX(position),0)+1 AS next_position "
-                "FROM committee_speakers WHERE committee=?", (committee,),
-        ).fetchone()["next_position"]
-        duration = active_session["duration"]
-        added = db_execute(
-            db, "INSERT INTO committee_speakers(committee,user_code,position,duration) "
-                "VALUES(?,?,?,?) "
-                "ON CONFLICT(committee,user_code) DO NOTHING",
-            (committee, delegate["code"], position, duration),
+            async with redis.pubsub() as pubsub:
+                await pubsub.subscribe(f"user:{delegate_id}")
+                subscribed.set()
+                delay = 0.25
+                async for event in pubsub.listen():
+                    if event.get("type") != "message":
+                        continue
+                    message = event["data"]
+                    if isinstance(message, bytes):
+                        message = message.decode("utf-8")
+                    await _send_socket_json(socket, msgspec.json.decode(message))
+        except asyncio.CancelledError:
+            raise
+        except (RedisError, OSError, UnicodeDecodeError, msgspec.DecodeError):
+            logger.exception("Redis subscription failed for delegate %s; reconnecting", delegate_id)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 5)
+
+
+async def _authenticate_socket(socket: WebSocket) -> str | None:
+    token = socket.cookies.get(COOKIE_NAME)
+    if not token:
+        return None
+    delegate_id = await socket.app.state.redis.get(f"session:{token}")
+    if isinstance(delegate_id, bytes):
+        delegate_id = delegate_id.decode("utf-8")
+    if delegate_id not in socket.app.state.users:
+        return None
+    return delegate_id
+
+
+async def _authenticate_request(request: Request) -> str:
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise NotAuthorizedException("Authentication required")
+    delegate_id = await request.app.state.redis.get(f"session:{token}")
+    if isinstance(delegate_id, bytes):
+        delegate_id = delegate_id.decode("utf-8")
+    if delegate_id not in request.app.state.users:
+        raise NotAuthorizedException("Authentication required")
+    return delegate_id
+
+
+def _save_delivery_status(chit_id: int, delivered: bool, delivered_at: str) -> None:
+    status = "delivered" if delivered else "queued"
+    timestamp = delivered_at if delivered else ""
+    with _connect_database() as connection:
+        connection.execute(
+            "UPDATE messages SET status = ?, delivered_at = ? WHERE id = ?",
+            (status, timestamp, chit_id),
         )
-        if added.rowcount != 1:
-            return jsonify(error="That delegate is already on the speaking list"), 409
-    elif action in ("remove", "move"):
-        try:
-            speaker_id = int(data.get("speaker_id"))
-        except (TypeError, ValueError):
-            return jsonify(error="Invalid speaker"), 400
-        ordered = db_execute(
-            db, "SELECT id FROM committee_speakers WHERE committee=? ORDER BY position,id",
-            (committee,),
+
+
+def _get_inbox(delegate_id: str) -> list[dict[str, Any]]:
+    with _connect_database() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, sender, recipient, body, status, created_at, subtype
+            FROM messages
+            WHERE recipient = ? OR sender = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 500
+            """,
+            (delegate_id, delegate_id),
         ).fetchall()
-        ids = [row["id"] for row in ordered]
-        if speaker_id not in ids:
-            return jsonify(error="Speaker is not on this committee's list"), 404
-        if action == "remove":
-            db_execute(db, "DELETE FROM committee_speakers WHERE id=? AND committee=?",
-                       (speaker_id, committee))
-            ids.remove(speaker_id)
+    return [dict(row) for row in rows]
+
+
+class ChitWebSocketListener(WebsocketListener):
+    path = "/ws/echits"
+    receive_mode = "text"
+    send_mode = "text"
+
+    async def on_accept(self, socket: WebSocket) -> None:
+        state = socket.scope.setdefault("state", {})
+        delegate_id = await _authenticate_socket(socket)
+        if not delegate_id:
+            await socket.close(code=4401, reason="Authentication required")
+            return
+        state["authenticated_delegate_id"] = delegate_id
+        state["subscription_task"] = None
+        state["subscription_ready"] = None
+        state["send_lock"] = asyncio.Lock()
+
+    async def on_receive(self, data: str, socket: WebSocket) -> None:
+        state = socket.scope.setdefault("state", {})
+        delegate_id = state.get("authenticated_delegate_id")
+        if not delegate_id:
+            await socket.close(code=4401, reason="Authentication required")
+            return
+        try:
+            request = msgspec.json.decode(data, type=ClientMessage)
+        except (msgspec.DecodeError, TypeError, ValueError):
+            await _send_socket_json(socket, {"type": "error", "error": "Malformed JSON payload"})
+            return
+
+        if request.action == "register":
+            await self._register(request, socket, delegate_id)
+        elif request.action == "send_chit":
+            await self._send_chit(request, socket, delegate_id)
         else:
-            direction = data.get("direction")
-            index = ids.index(speaker_id)
-            other = index - 1 if direction == "up" else index + 1 if direction == "down" else index
-            if other == index:
-                return jsonify(error="Choose up or down"), 400
-            if 0 <= other < len(ids):
-                ids[index], ids[other] = ids[other], ids[index]
-        for position, row_id in enumerate(ids, 1):
-            db_execute(
-                db, "UPDATE committee_speakers SET position=? WHERE id=? AND committee=?",
-                (position, row_id, committee),
+            await _send_socket_json(socket, {"type": "error", "error": "Unknown action"})
+
+    async def _register(self, request: ClientMessage, socket: WebSocket, delegate_id: str) -> None:
+        if not request.delegate_id or not hmac.compare_digest(request.delegate_id, delegate_id):
+            await _send_socket_json(socket, {"type": "error", "error": "Delegate identity mismatch"})
+            return
+
+        state = socket.scope["state"]
+        existing_task = state.get("subscription_task")
+        if existing_task and not existing_task.done():
+            await _send_socket_json(socket, {"type": "registered", "delegate_id": delegate_id})
+            return
+
+        ready = asyncio.Event()
+        task = asyncio.create_task(
+            _listen_for_chits(socket, delegate_id, socket.app.state.redis, ready),
+            name=f"redis-chit-listener-{delegate_id}",
+        )
+        state["delegate_id"] = delegate_id
+        state["subscription_task"] = task
+        state["subscription_ready"] = ready
+        try:
+            await asyncio.wait_for(ready.wait(), timeout=REGISTER_TIMEOUT_SECONDS)
+        except TimeoutError:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            state["subscription_task"] = None
+            state["subscription_ready"] = None
+            await _send_socket_json(socket, {"type": "error", "error": "Redis subscription unavailable"})
+            return
+        await _send_socket_json(socket, {"type": "registered", "delegate_id": delegate_id})
+
+    async def _send_chit(self, request: ClientMessage, socket: WebSocket, sender_id: str) -> None:
+        subscription_task = socket.scope["state"].get("subscription_task")
+        if not subscription_task or subscription_task.done():
+            await _send_socket_json(socket, {"type": "error", "error": "Register before sending chits"})
+            return
+        receiver_id = (request.receiver or "").strip().upper()
+        body = (request.message or "").strip()
+        if not receiver_id or not body or len(body) > MAX_MESSAGE_LENGTH:
+            await _send_socket_json(
+                socket,
+                {"type": "error", "error": f"Receiver and a 1-{MAX_MESSAGE_LENGTH} character message are required"},
             )
-    else:
-        return jsonify(error="Unknown speaking-list action"), 400
-    db.commit()
-    return jsonify(ok=True)
+            return
+
+        users: dict[str, dict[str, str]] = socket.app.state.users
+        sender = users[sender_id]
+        receiver = users.get(receiver_id)
+        if receiver is None:
+            await _send_socket_json(socket, {"type": "error", "error": "Receiver not found"})
+            return
+        if not _is_allowed_sender(sender, receiver):
+            await _send_socket_json(socket, {"type": "error", "error": "Chits can only be sent within your committee"})
+            return
+
+        created_at = datetime.now(timezone.utc).isoformat()
+        try:
+            chit_id = await asyncio.to_thread(_save_chit, sender, receiver, body, created_at)
+            payload = {
+                "type": "chit",
+                "id": chit_id,
+                "sender": sender_id,
+                "sender_name": sender["name"],
+                "receiver": receiver_id,
+                "message": body,
+                "timestamp": created_at,
+            }
+            listeners = await socket.app.state.redis.publish(
+                f"user:{receiver_id}", msgspec.json.encode(payload)
+            )
+            await asyncio.to_thread(
+                _save_delivery_status, chit_id, listeners > 0, created_at
+            )
+        except (sqlite3.Error, RedisError):
+            logger.exception("Failed to persist or publish chit from %s to %s", sender_id, receiver_id)
+            await _send_socket_json(socket, {"type": "error", "error": "Chit could not be delivered"})
+            return
+
+        await _send_socket_json(
+            socket,
+            {
+                "type": "delivery_ack",
+                "id": chit_id,
+                "receiver": receiver_id,
+                "delivered": listeners > 0,
+                "active_listeners": listeners,
+                "timestamp": created_at,
+            },
+        )
+
+    async def on_disconnect(self, socket: WebSocket) -> None:
+        state = socket.scope["state"]
+        task = state.pop("subscription_task", None)
+        state.pop("subscription_ready", None)
+        state.pop("delegate_id", None)
+        state.pop("authenticated_delegate_id", None)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
 
-@flask_app.post("/api/speakers/timer")
-def start_speaker_timer():
-    user, err = need_login(("chair",))
-    if err:
-        return err
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify(error="Invalid timer details"), 400
+@post("/api/login")
+async def login(data: LoginRequest, request: Request) -> Response[dict[str, str]]:
+    code = data.access_code.strip().upper()
+    user = request.app.state.users.get(code)
+    if not user:
+        raise NotAuthorizedException("Invalid access code")
+    token = secrets.token_urlsafe(32)
+    await request.app.state.redis.set(
+        f"session:{token}", code, ex=SESSION_TTL_SECONDS
+    )
+    secure_cookie_setting = os.getenv("SESSION_COOKIE_SECURE")
+    secure_cookie_enabled = (
+        secure_cookie_setting.lower() in {"1", "true", "yes"}
+        if secure_cookie_setting is not None
+        else os.getenv("APP_ENV") == "production"
+    )
+    secure_cookie = "; Secure" if secure_cookie_enabled else ""
+    return Response(
+        content={"delegate_id": code, "name": user["name"], "committee": user["committee"]},
+        headers={
+            "set-cookie": (
+                f"{COOKIE_NAME}={token}; HttpOnly; SameSite=Lax; Path=/; "
+                f"Max-Age={SESSION_TTL_SECONDS}{secure_cookie}"
+            )
+        },
+    )
+
+
+@post("/api/logout")
+async def logout(request: Request) -> Response[dict[str, str]]:
+    token = request.cookies.get(COOKIE_NAME)
+    if token:
+        await request.app.state.redis.delete(f"session:{token}")
+    return Response(
+        content={"status": "logged_out"},
+        headers={"set-cookie": f"{COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"},
+    )
+
+
+@get("/health")
+async def health(request: Request) -> dict[str, str]:
+    await request.app.state.redis.ping()
+    return {"status": "ok"}
+
+
+@get("/api/me")
+async def me(request: Request) -> dict[str, str]:
+    delegate_id = await _authenticate_request(request)
+    user = request.app.state.users[delegate_id]
+    return {
+        "delegate_id": delegate_id,
+        "name": user["name"],
+        "committee": user["committee"],
+        "country": user["country"],
+        "role": user["role"],
+    }
+
+
+@get("/api/inbox")
+async def inbox(request: Request) -> list[dict[str, Any]]:
+    delegate_id = await _authenticate_request(request)
+    return await asyncio.to_thread(_get_inbox, delegate_id)
+
+
+@asynccontextmanager
+async def lifespan(app: Litestar):
+    users = await asyncio.to_thread(_load_users)
+    await asyncio.to_thread(_initialize_database, users)
+    redis = Redis.from_url(
+        os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        decode_responses=False,
+        max_connections=int(os.getenv("REDIS_MAX_CONNECTIONS", "2048")),
+        health_check_interval=30,
+        socket_keepalive=True,
+    )
+    await redis.ping()
+    app.state.users = {user["code"]: user for user in users}
+    app.state.redis = redis
     try:
-        speaker_id = int(data.get("speaker_id"))
-    except (TypeError, ValueError):
-        return jsonify(error="Choose a speaker"), 400
-    db = get_db()
-    now = time.time()
-    expire_speaker_timer(db, user["committee"], now)
-    speaker = db_execute(
-        db, "SELECT s.user_code, s.duration FROM committee_speakers s "
-            "JOIN users u ON u.code=s.user_code "
-            "WHERE s.id=? AND s.committee=? AND u.role='delegate'",
-        (speaker_id, user["committee"]),
-    ).fetchone()
-    if not speaker:
-        return jsonify(error="That speaker is not on your committee's list"), 403
-    expire_caucus_session(db, user["committee"], now)
-    active_session = db_execute(
-        db, "SELECT mode, duration FROM committee_session WHERE committee=?",
-        (user["committee"],),
-    ).fetchone()
-    if not active_session:
-        return jsonify(error="Start a speaking format before starting a speaker timer"), 409
-    if active_session["mode"] not in ("gsl", "moderated_caucus"):
-        return jsonify(error="Speaker timers are not used in this speaking format"), 409
-    duration = active_session["duration"]
-    db_execute(
-        db,
-        "INSERT INTO committee_timer(committee,user_code,started_at,duration) "
-        "VALUES(?,?,?,?) ON CONFLICT(committee) DO UPDATE SET "
-        "user_code=excluded.user_code, started_at=excluded.started_at, duration=excluded.duration",
-        (user["committee"], speaker["user_code"], int(now), duration),
-    )
-    db.commit()
-    return jsonify(ok=True)
+        yield
+    finally:
+        await redis.aclose()
 
 
-@flask_app.post("/api/speakers/session")
-def update_speaker_session():
-    user, err = need_login(("chair",))
-    if err:
-        return err
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify(error="Invalid speaking-session details"), 400
-    mode = data.get("mode")
-    db = get_db()
-    if mode == "end":
-        db_execute(db, "DELETE FROM committee_session WHERE committee=?", (user["committee"],))
-        clear_speaking_order(db, user["committee"])
-        db.commit()
-        return jsonify(ok=True)
-    if mode not in ("gsl", "moderated_caucus", "unmoderated_caucus"):
-        return jsonify(error="Choose GSL, moderated caucus, or unmoderated caucus"), 400
-    duration = 0
-    if mode in ("gsl", "moderated_caucus"):
-        try:
-            duration = int(data.get("duration"))
-        except (TypeError, ValueError):
-            return jsonify(error="Choose a valid speaking time per delegate"), 400
-        if not 1 <= duration <= 3600:
-            return jsonify(error="Speaking time must be between 1 second and 60 minutes"), 400
-    total_duration = None
-    if mode in ("moderated_caucus", "unmoderated_caucus"):
-        try:
-            total_duration = int(data.get("total_duration"))
-        except (TypeError, ValueError):
-            return jsonify(error="Choose a valid total caucus time"), 400
-        if not 1 <= total_duration <= 3600:
-            return jsonify(error="Total caucus time must be between 1 second and 60 minutes"), 400
-    now = int(time.time())
-    clear_speaking_order(db, user["committee"])
-    db_execute(
-        db,
-        "INSERT INTO committee_session(committee,mode,duration,started_at,total_duration) "
-        "VALUES(?,?,?,?,?) "
-        "ON CONFLICT(committee) DO UPDATE SET mode=excluded.mode, "
-        "duration=excluded.duration, started_at=excluded.started_at, "
-        "total_duration=excluded.total_duration",
-        (user["committee"], mode, duration, now, total_duration),
-    )
-    db.commit()
-    return jsonify(ok=True)
-
-
-@flask_app.post("/api/speakers/general-timer")
-def update_general_timer():
-    user, err = need_login(("chair",))
-    if err:
-        return err
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify(error="Invalid timer details"), 400
-    action = data.get("action")
-    db = get_db()
-    committee = user["committee"]
-
-    if action == "reset":
-        db_execute(db, "DELETE FROM committee_general_timer WHERE committee=?", (committee,))
-        db.commit()
-        return jsonify(ok=True)
-
-    timer = db_execute(
-        db, "SELECT duration, started_at, remaining, running "
-            "FROM committee_general_timer WHERE committee=?",
-        (committee,),
-    ).fetchone()
-    if action == "start":
-        try:
-            duration = int(data.get("duration"))
-        except (TypeError, ValueError):
-            return jsonify(error="Choose a valid timer duration"), 400
-        if not 1 <= duration <= 3600:
-            return jsonify(error="Timer duration must be between 1 second and 60 minutes"), 400
-        db_execute(
-            db,
-            "INSERT INTO committee_general_timer(committee,duration,started_at,remaining,running) "
-            "VALUES(?,?,?,?,?) ON CONFLICT(committee) DO UPDATE SET "
-            "duration=excluded.duration, started_at=excluded.started_at, "
-            "remaining=excluded.remaining, running=excluded.running",
-            (committee, duration, int(time.time()), duration, True if DATABASE_URL else 1),
-        )
-    elif action == "pause":
-        if not timer or not timer["running"]:
-            return jsonify(error="No running general timer to pause"), 409
-        remaining = max(0, timer["duration"] - (int(time.time()) - timer["started_at"]))
-        db_execute(
-            db, "UPDATE committee_general_timer SET duration=?, remaining=?, running=? "
-                "WHERE committee=?",
-            (remaining, remaining, False if DATABASE_URL else 0, committee),
-        )
-    elif action == "resume":
-        if not timer or timer["running"] or timer["remaining"] <= 0:
-            return jsonify(error="No paused general timer to resume"), 409
-        db_execute(
-            db, "UPDATE committee_general_timer SET duration=remaining, started_at=?, running=? "
-                "WHERE committee=?",
-            (int(time.time()), True if DATABASE_URL else 1, committee),
-        )
-    else:
-        return jsonify(error="Choose start, pause, resume, or reset"), 400
-    db.commit()
-    return jsonify(ok=True)
-
-
-# ---------- messaging ----------
-@flask_app.post("/api/send")
-def send():
-    u, err = need_login()
-    if err:
-        return err
-    is_multipart = request.mimetype == "multipart/form-data"
-    d = request.form if is_multipart else request.get_json(silent=True)
-    if d is None or (not is_multipart and not isinstance(d, dict)):
-        return jsonify(error="Invalid message details"), 400
-    kind = d.get("kind")
-    subtype = d.get("subtype", "other")
-    visibility = d.get("visibility", "private")
-    subject = d.get("subject", "")
-    body = d.get("body", "")
-    if not isinstance(subject, str) or not isinstance(body, str):
-        return jsonify(error="Subject and message must be text"), 400
-    subject = subject.strip()[:120]
-    body = body.strip()[:2000]
-    if kind not in ("chit", "directive", "resolution"):
-        return jsonify(error="Unknown message type"), 400
-    if kind == "chit" and subtype not in ("poi", "other"):
-        return jsonify(error="Choose POI or Other for the chit type"), 400
-    if kind == "directive" and visibility not in ("private", "public"):
-        return jsonify(error="Choose private or public directive visibility"), 400
-    document_url = None
-    attachment = None
-    if kind == "resolution":
-        try:
-            document_url = validate_google_document_url(d.get("doc_url", ""))
-            attachment = parse_resolution_attachment(request.files.get("document"))
-        except ValueError as error:
-            return jsonify(error=str(error)), 400
-        if document_url and attachment:
-            return jsonify(error="Use a Google Docs/Drive URL or upload a document, not both"), 400
-    elif d.get("doc_url") or (is_multipart and request.files.get("document")):
-        return jsonify(error="Attachments are only supported for resolutions"), 400
-    if d.get("reply_to") is not None and kind != "chit":
-        return jsonify(error="Only chits can be replied to"), 400
-    if not subject or not body:
-        return jsonify(error="Subject and message are both required"), 400
-
-    db = get_db()
-    if kind in ("directive", "resolution"):
-        if u["role"] != "delegate":
-            return jsonify(error="Only delegates submit directives/resolutions"), 403
-        chair = db_execute(db, "SELECT code FROM users WHERE role='chair' AND committee=?",
-                           (u["committee"],)).fetchone()
-        if not chair:
-            return jsonify(error="No chair is assigned to your committee yet"), 400
-        recipient, status, committee = chair["code"], "pending", u["committee"]
-    else:
-        reply_to = d.get("reply_to")
-        if reply_to is not None:
-            try:
-                original_id = int(reply_to)
-            except (TypeError, ValueError):
-                return jsonify(error="That chit cannot be replied to"), 400
-            original = db_execute(db,
-                "SELECT sender FROM messages "
-                "WHERE id=? AND recipient=? AND kind='chit' AND status IN ('delivered','approved')",
-                (original_id, u["code"]),
-            ).fetchone()
-            if not original:
-                return jsonify(error="That chit is no longer available to reply to"), 400
-            target = db_execute(db, "SELECT * FROM users WHERE code=?", (original["sender"],)).fetchone()
-        else:
-            try:
-                to_id = int(d.get("to"))
-            except (TypeError, ValueError):
-                return jsonify(error="Pick a recipient"), 400
-            user_id = "id" if DATABASE_URL else "rowid"
-            target = db_execute(
-                db, f"SELECT {user_id} AS id, * FROM users WHERE {user_id}=?", (to_id,)
-            ).fetchone()
-        if not target or target["code"] == u["code"]:
-            return jsonify(error="Pick a valid recipient"), 400
-        if u["role"] == "delegate" and target["committee"] != u["committee"]:
-            return jsonify(error="Delegates can only send chits within their committee"), 403
-        if u["role"] != "admin" and target["role"] != "admin" and target["committee"] != u["committee"]:
-            return jsonify(error="You can only message people in your committee"), 403
-        recipient = target["code"]
-        committee = u["committee"] if u["role"] != "admin" else target["committee"]
-        # delegate -> delegate chits need chair approval; everything else is instant
-        status = "pending" if (u["role"] == "delegate" and target["role"] == "delegate") else "delivered"
-
-    db_execute(
-        db,
-        "INSERT INTO messages(sender,recipient,committee,kind,subject,body,status,note,created,"
-        "delivered_at,subtype,visibility,document_url,attachment_name,attachment_mime,"
-        "attachment_data) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            u["code"], recipient, committee, kind, subject, body, status, "",
-            int(time.time()), int(time.time()) if kind == "chit" and status == "delivered" else None,
-            subtype if kind == "chit" else "other",
-            visibility if kind == "directive" else "private",
-            document_url,
-            attachment[0] if attachment else None,
-            attachment[1] if attachment else None,
-            attachment[2] if attachment else None,
-        ),
-    )
-    db.commit()
-    return jsonify(ok=True, status=status)
-
-
-@flask_app.get("/api/messages/<int:message_id>/attachment")
-def download_message_attachment(message_id):
-    user, err = need_login()
-    if err:
-        return err
-    message = db_execute(
-        get_db(),
-        "SELECT id, sender, recipient, committee, kind, status, visibility, "
-        "attachment_name, attachment_mime, attachment_data "
-        "FROM messages WHERE id=?",
-        (message_id,),
-    ).fetchone()
-    if not message or not message["attachment_data"]:
-        return jsonify(error="Attachment not found"), 404
-
-    is_sender = message["sender"] == user["code"]
-    is_recipient = (
-        message["recipient"] == user["code"]
-        and message["status"] in ("delivered", "approved")
-    )
-    is_chair_reviewing = (
-        user["role"] == "chair"
-        and user["committee"] == message["committee"]
-        and message["status"] == "pending"
-    )
-    is_admin_reviewing = (
-        user["role"] == "admin"
-        and message["status"] == "pending"
-        and not (message["kind"] == "directive" and message["visibility"] == "private")
-    )
-    if not (is_sender or is_recipient or is_chair_reviewing or is_admin_reviewing):
-        return jsonify(error="Attachment not found"), 404
-
-    response = send_file(
-        io.BytesIO(bytes(message["attachment_data"])),
-        mimetype=message["attachment_mime"],
-        as_attachment=True,
-        download_name=message["attachment_name"],
-    )
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    return response
-
-
-@flask_app.get("/api/inbox")
-def inbox():
-    u, err = need_login()
-    if err:
-        return err
-    received = rows(MSG_SQL + "WHERE (m.recipient=? AND m.status IN ('delivered','approved')) "
-                    "OR (m.kind='directive' AND m.visibility='public' AND m.status='approved') "
-                    "ORDER BY m.id DESC", (u["code"],))
-    sent = rows(MSG_SQL + "WHERE m.sender=? ORDER BY m.id DESC", (u["code"],))
-    if u["role"] == "admin":
-        pending = rows(
-            MSG_SQL + "WHERE m.status='pending' "
-            "AND NOT (m.kind='directive' AND m.visibility='private') ORDER BY m.id"
-        )
-    elif u["role"] == "chair":
-        pending = rows(
-            MSG_SQL + "WHERE m.status='pending' AND m.committee=? ORDER BY m.id",
-            (u["committee"],),
-        )
-    else:
-        pending = []
-    return jsonify(received=received, sent=sent, queue=pending)
-
-
-@flask_app.get("/api/chit-history")
-def chit_history():
-    chair, err = need_login(("chair",))
-    if err:
-        return err
-    db = get_db()
-    user_id = "id" if DATABASE_URL else "rowid"
-    delegates = rows(
-        f"SELECT {user_id} AS id, name, country FROM users "
-        "WHERE role='delegate' AND committee=? ORDER BY name",
-        (chair["committee"],),
-    )
-    selected_id = request.args.get("delegate_id", "").strip()
-    if not selected_id:
-        return jsonify(delegates=delegates, messages=[])
-    try:
-        selected_id = int(selected_id)
-    except (TypeError, ValueError):
-        return jsonify(error="Choose a delegate from your committee"), 400
-    delegate = db_execute(
-        db,
-        f"SELECT code FROM users WHERE {user_id}=? AND role='delegate' AND committee=?",
-        (selected_id, chair["committee"]),
-    ).fetchone()
-    if not delegate:
-        return jsonify(error="That delegate is not in your committee"), 404
-    messages = rows(
-        MSG_SQL + "WHERE m.committee=? AND m.kind='chit' "
-        "AND (m.sender=? OR m.recipient=?) ORDER BY m.id DESC",
-        (chair["committee"], delegate["code"], delegate["code"]),
-    )
-    return jsonify(delegates=delegates, messages=messages)
-
-
-@flask_app.get("/api/queue")
-def queue():
-    u, err = need_login(("chair", "admin"))
-    if err:
-        return err
-    if u["role"] == "admin":
-        data = rows(
-            MSG_SQL + "WHERE m.status='pending' "
-            "AND NOT (m.kind='directive' AND m.visibility='private') ORDER BY m.id"
-        )
-    else:
-        data = rows(MSG_SQL + "WHERE m.status='pending' AND m.committee=? ORDER BY m.id",
-                    (u["committee"],))
-    return jsonify(data)
-
-
-@flask_app.post("/api/review")
-def review():
-    u, err = need_login(("chair", "admin"))
-    if err:
-        return err
-    d = request.get_json(silent=True)
-    if not isinstance(d, dict):
-        return jsonify(error="Invalid review details"), 400
-    action = d.get("action")
-    note = d.get("note", "")
-    if not isinstance(note, str):
-        return jsonify(error="Chair note must be text"), 400
-    note = note.strip()[:300]
-    try:
-        mid = int(d.get("id"))
-    except (TypeError, ValueError):
-        return jsonify(error="Bad message id"), 400
-    if action not in ("approve", "reject"):
-        return jsonify(error="Unknown action"), 400
-
-    db = get_db()
-    m = db_execute(db, "SELECT * FROM messages WHERE id=?", (mid,)).fetchone()
-    if not m or m["status"] != "pending":
-        return jsonify(error="That message is no longer pending"), 400
-    if u["role"] == "admin" and m["kind"] == "directive" and m["visibility"] == "private":
-        return jsonify(error="Private directives can only be reviewed by the committee chair"), 403
-    if u["role"] == "chair" and m["committee"] != u["committee"]:
-        return jsonify(error="Not your committee"), 403
-    result = db_execute(
-        db,
-        "UPDATE messages SET status=?, note=?, delivered_at=CASE "
-        "WHEN ?='approved' AND kind='chit' THEN ? ELSE delivered_at END "
-        "WHERE id=? AND status='pending'",
-        (
-            "approved" if action == "approve" else "rejected", note,
-            "approved" if action == "approve" else "rejected", int(time.time()), mid,
-        ),
-    )
-    if result.rowcount != 1:
-        return jsonify(error="That message is no longer pending"), 400
-    db.commit()
-    return jsonify(ok=True)
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "5000")), log_level="info")
+app = Litestar(
+    route_handlers=[login, logout, health, me, inbox, ChitWebSocketListener],
+    lifespan=[lifespan],
+)

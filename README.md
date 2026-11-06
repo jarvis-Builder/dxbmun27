@@ -1,56 +1,60 @@
-# DXBMUN 27'
+# DXBMUN E-Chits backend
 
-Website and E-Chits platform for DXB MUN 2027 at Indian High School, Dubai. Confirm event details and timings with the organizers; the schedule and committee agendas on the site may change.
+Litestar ASGI backend for E-Chits. It uses Redis Pub/Sub for real-time delivery and SQLite (WAL mode) for persistent message history. The DXBMUN website is not part of this service.
 
-## Features
-- Home, About, Committees pinwheel (19 committees), 3-day schedule, local Wellness checklist with a completion celebration, Resources and floor timer
-- Three-second DXB MUN opening cinematic (automatically skipped for reduced-motion preferences)
-- Committee wheel selections include a short overview of each committee
-- Shared speaking order and live speaker timer at `/timer.html`; the committee chair can add and reorder delegates during GSL or moderated caucus, set per-speech and total caucus times, run an unmoderated caucus countdown, and use a separate general-purpose timer
-- E-Chits: log in with one access code (DEL/CHR/ADN + 5 digits)
-  - Delegates: send POI/Other chits, private/public directives, and resolutions with an optional Google Docs/Drive URL or PDF/DOC/DOCX/ODT/TXT attachment (max 3 MB); reply to received chits
-  - Choosing Directive opens a private/public visibility prompt; private directives remain visible only to the sender and committee chair, while approved public directives are visible to all logged-in users
-  - Chairs: review pending messages for their committee and view each delegate's chit history
-  - Admins: review all pending messages and use the E-Chits directory
-  - Chits, including POIs, remain in inboxes and are retained for chair history
+## Requirements
 
-## Access codes
-8 characters: `DEL` / `CHR` / `ADN` followed by 5 digits (e.g. `DEL12345`).
-Codes, names and allocations come from `users.csv`
-(columns: `code,name,committee,country`).
-`users.sample.csv` contains public demo codes for local testing only. Do not use those codes or the sample list for a live conference.
+- Python 3.11+
+- Redis 7+
+- `users.csv` with the columns `code,name,committee,country`; access codes should be private and unique.
 
-## Run locally
-    pip install -r requirements.txt
-    uvicorn app:app --host 127.0.0.1 --port 5000 --reload
-Then open http://127.0.0.1:5000
+Install dependencies and run locally:
 
-Direct local startup uses the sample access codes and a development-only session key. To use another port, set `PORT` (for example, `PORT=8000 uvicorn app:app --host 127.0.0.1 --port 8000 --reload`). Never expose the local server or use the sample list in production.
+```sh
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+redis-server
+USERS_FILE=users.csv REDIS_URL=redis://localhost:6379/0 \
+  uvicorn app:app --host 127.0.0.1 --port 8000
+```
 
-## Deploy to Vercel
-Vercel detects the FastAPI application in `app.py` and serves assets from `public/`. E-Chits uses PostgreSQL in production because Vercel's local filesystem is temporary; local `uvicorn app:app --reload` continues to use SQLite.
+For local smoke testing only, omit `USERS_FILE` to load `users.sample.csv`. Never use the sample list for a live conference.
 
-If none of `SECRET_KEY`, `DATABASE_URL`, or `USERS_CSV` is set, E-Chits runs in public demo mode with the sample accounts and temporary SQLite storage under `/tmp`; no environment-variable setup is needed to try it. Demo accounts and data are public, and data may be lost or differ between function instances. Do not use this mode for real delegates or sensitive messages. Live use still requires the production configuration below.
+## Docker Compose
 
-1. Create a PostgreSQL database (for example, on [Neon](https://neon.tech/)) and copy its pooled connection string. E-Chits reuses a bounded connection pool per application instance; `DB_POOL_MAX_SIZE` defaults to `5` and can be set from `1` to `20` to match the database connection budget.
-2. Import this Git repository as a project in [Vercel](https://vercel.com/). Keep the project root at the repository root and use the detected Python/FastAPI settings.
-3. Add these environment variables to the Vercel project for Production:
-   - `DATABASE_URL`: the private PostgreSQL connection string.
-   - `SECRET_KEY`: a long, unique random value.
-   - `USERS_CSV`: the complete private delegate CSV, including the `code,name,committee,country` header.
-4. Deploy from the Vercel dashboard. Subsequent commits to the connected branch deploy automatically.
-5. Confirm the page and assets load, then test E-Chits using an access code from the private CSV. Review Vercel runtime logs and the database if requests fail.
+Set `USERS_FILE` to the path of a private CSV, or use the sample list for development:
 
-Do not commit `users.csv` or put real access codes in a public asset. Use a separate database and sanitized access-code list for Preview deployments. Database schema changes are serialized across application instances, and user records are synchronized without replacing unchanged records. The database connection limit is shared by all running application instances: size the provider's pooled connection URL and `DB_POOL_MAX_SIZE` for the deployment's instance count. A successful 800–1,000-delegate event load still depends on the selected hosting plan, database limits, network capacity, and a load test against the actual production configuration; local testing cannot certify those provider limits.
+```sh
+USERS_FILE=users.csv APP_ENV=production docker compose up --build
+```
 
-## Deploy to Render
-For Render, use the start command `uvicorn app:app --host 0.0.0.0 --port 8000`.
-Store the real delegate list as a Secret File called `users.csv`.
-Set `SECRET_KEY` to a long random value and set `SESSION_COOKIE_SECURE=1` when serving the site over HTTPS. Production startup requires `SECRET_KEY` and a real `users.csv`/`USERS_FILE`; it will not fall back to demo accounts.
+The web container starts four Uvicorn workers; Compose sets each container's `nofile` limit to 4096. `deploy.sh` applies the same host-shell limit before starting the stack. SQLite data persists in the `echits-data` volume. Configure `APP_ENV=production` when using a private users file. Redis Pub/Sub is ephemeral; SQLite retains messages when recipients are offline.
 
-## Editing content
-- Committee selector and shared interactions: `public/js/main.js`
-- Committee descriptions and wheel content: `templates/index.html`
-- Shared speaking list and timer: `public/timer.html`, `public/js/timer.js`, and `app.py`
-- Colours, homepage layout and hero photo: `public/css/home.css` and `public/images/hero-photo.jpg`
-- E-Chits presentation and behavior: `public/css/echits.css` and `public/js/echits.js`
+## HTTP API
+
+- `POST /api/login` with `{"access_code":"..."}` sets an HTTP-only session cookie.
+- `POST /api/logout` invalidates the session and clears the cookie.
+- `GET /api/me` returns the signed-in user's profile.
+- `GET /api/inbox` returns the user's latest 500 sent and received messages.
+- `GET /health` checks Redis connectivity.
+
+In production, terminate TLS at a trusted reverse proxy and set `SESSION_COOKIE_SECURE=1`. Keep `users.csv` out of source control and restrict access to the SQLite data volume and Redis service.
+
+## WebSocket protocol
+
+Connect to `/ws/echits` with the session cookie from `/api/login`.
+
+Register the authenticated user:
+
+```json
+{"action":"register","delegate_id":"DEL12345"}
+```
+
+Send a chit:
+
+```json
+{"action":"send_chit","receiver":"DEL12346","message":"Please send your position paper."}
+```
+
+Successful sends receive a `delivery_ack` with the Redis subscriber count. A recipient with an active registered socket receives a `chit` event. Malformed JSON and invalid actions return an error event without closing the connection. Chits are restricted to users in the same committee, except that admins can send to or receive from any committee.

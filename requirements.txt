@@ -1,6 +1,4 @@
-Flask==3.0.3
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-gunicorn==22.0.0
-psycopg[binary]>=3.2,<4
-psycopg_pool>=3.2,<4
+litestar>=2.16,<3
+uvicorn[standard]>=0.34,<1
+redis>=5,<7
+msgspec>=0.19,<1
